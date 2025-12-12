@@ -60,11 +60,36 @@ def shutdown_session(exception=None):
 @app.route('/api/health', methods=['GET'])
 def health_check():
     """Health check endpoint"""
+    trip_count = db_session.query(Trip).count()
+    country_count = db_session.query(Country).count()
     return jsonify({
         'status': 'healthy',
         'service': 'SmartTrip API',
-        'version': '1.0.0'
+        'version': '1.0.0',
+        'database': {
+            'trips': trip_count,
+            'countries': country_count
+        }
     }), 200
+
+
+@app.route('/api/seed', methods=['POST'])
+def manual_seed():
+    """Manually trigger database seeding (use if auto-seed failed)"""
+    try:
+        from seed import seed_database
+        seed_database()
+        trip_count = db_session.query(Trip).count()
+        return jsonify({
+            'success': True,
+            'message': 'Database seeded successfully',
+            'trips_created': trip_count
+        }), 200
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
 
 
 # ============================================
@@ -530,14 +555,36 @@ def internal_error(error):
 
 
 # ============================================
+# AUTO-SEED DATABASE IF EMPTY
+# ============================================
+
+def auto_seed_if_empty():
+    """Automatically seed the database if no trips exist"""
+    try:
+        trip_count = db_session.query(Trip).count()
+        if trip_count == 0:
+            print("Database is empty. Auto-seeding...")
+            from seed import seed_database
+            seed_database()
+            print("Auto-seeding completed successfully!")
+        else:
+            print(f"Database already has {trip_count} trips. Skipping seed.")
+    except Exception as e:
+        print(f"Auto-seed check failed: {e}")
+        # Don't crash the app if seeding fails
+        pass
+
+
+# ============================================
 # MAIN
 # ============================================
 
+# Initialize database and auto-seed on module load (for production)
+with app.app_context():
+    init_db()
+    auto_seed_if_empty()
+
 if __name__ == '__main__':
-    # Initialize database on startup
-    with app.app_context():
-        init_db()
-    
     # Run Flask development server
     port = int(os.getenv('PORT', 5000))
     host = os.getenv('HOST', '0.0.0.0')
