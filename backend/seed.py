@@ -210,30 +210,31 @@ def seed_database():
         # ============================================
         print("Seeding guides...")
         
-        # 5 Specific hardcoded guides
+        # 5 Specific hardcoded guides (Hebrew names)
         specific_guides = [
-            ('Ayala Cohen', 'ayala@ayalageo.co.il', '+972-3-9436030', Gender.FEMALE, 45,
+            ('איילה כהן', 'ayala@ayalageo.co.il', '+972-3-9436030', Gender.FEMALE, 45,
              'Founder of Ayala Geographic, specializing in geographic depth tours worldwide',
              'מייסדת איילה גיאוגרפית, מתמחה בטיולי עומק גיאוגרפיים ברחבי העולם'),
-            ('David Levi', 'david@ayalageo.co.il', '+972-50-1234567', Gender.MALE, 38,
+            ('דוד לוי', 'david@ayalageo.co.il', '+972-50-1234567', Gender.MALE, 38,
              'Expert in African safaris and wildlife tours',
              'מומחה לספארי אפריקאי וטיולי חיות בר'),
-            ('Sarah Mizrahi', 'sarah@ayalageo.co.il', '+972-52-9876543', Gender.FEMALE, 42,
+            ('שרה מזרחי', 'sarah@ayalageo.co.il', '+972-52-9876543', Gender.FEMALE, 42,
              'Specialist in Asian cultural tours and trekking',
              'מומחית לטיולי תרבות אסייתיים וטרקים'),
-            ('Moshe Amir', 'moshe@ayalageo.co.il', '+972-54-5556666', Gender.MALE, 50,
+            ('משה אמיר', 'moshe@ayalageo.co.il', '+972-54-5556666', Gender.MALE, 50,
              'Expert in European historical and cultural tours',
              'מומחה לטיולי היסטוריה ותרבות באירופה'),
-            ('Rachel Green', 'rachel@ayalageo.co.il', '+972-53-7778888', Gender.FEMALE, 35,
+            ('רחל גרין', 'rachel@ayalageo.co.il', '+972-53-7778888', Gender.FEMALE, 35,
              'Specialist in South American adventures and nature tours',
              'מומחית להרפתקאות וטיולי טבע בדרום אמריקה'),
         ]
         
-        for name, email, phone, gender, age, bio, bio_he in specific_guides:
+        for name_he, email, phone, gender, age, bio, bio_he in specific_guides:
             existing = session.query(Guide).filter(Guide.email == email).first()
             if not existing:
                 guide = Guide(
-                    name=name,
+                    name=name_he,  # Use Hebrew name
+                    name_he=name_he,  # Populate name_he field
                     email=email,
                     phone=phone,
                     gender=gender,
@@ -311,6 +312,7 @@ def seed_database():
             if not existing:
                 guide = Guide(
                     name=name_he,  # Use Hebrew name
+                    name_he=name_he,  # Populate name_he field
                     email=email_name,
                     phone=phone,
                     gender=gender,
@@ -489,11 +491,11 @@ def seed_database():
             max_capacity = random.choice([12, 15, 18, 20, 24, 25, 30])
             spots_left = random.randint(0, max_capacity)
             
-            # Determine status based on spots left (25% LAST_PLACES frequency)
+            # Determine status based on spots left (LAST_PLACES if <= 4 spots)
             if spots_left == 0:
                 status = TripStatus.FULL
-            elif spots_left <= 3:
-                status = TripStatus.LAST_PLACES
+            elif spots_left <= 4:
+                status = TripStatus.LAST_PLACES  # Force LAST_PLACES for scarcity
             elif spots_left >= max_capacity * 0.8:
                 status = TripStatus.OPEN
             else:

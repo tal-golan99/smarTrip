@@ -90,6 +90,7 @@ class Guide(Base):
     
     id = Column(Integer, primary_key=True, autoincrement=True)
     name = Column(String(100), nullable=False)
+    name_he = Column(String(100), nullable=True)  # Hebrew name
     email = Column(String(255), unique=True, nullable=False, index=True)
     phone = Column(String(20))
     gender = Column(Enum(Gender), nullable=False)
@@ -112,6 +113,8 @@ class Guide(Base):
         return {
             'id': self.id,
             'name': self.name,
+            'name_he': self.name_he,  # Hebrew name
+            'nameHe': self.name_he,   # camelCase for frontend compatibility
             'email': self.email,
             'phone': self.phone,
             'gender': self.gender.value,
