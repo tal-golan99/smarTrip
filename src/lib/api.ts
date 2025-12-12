@@ -80,6 +80,7 @@ export interface Tag {
   id: number;
   name: string;
   nameHe: string;
+  category: string;
   description?: string;
   createdAt: string;
   updatedAt: string;
