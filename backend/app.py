@@ -50,6 +50,16 @@ def shutdown_session(exception=None):
 # HEALTH CHECK
 # ============================================
 
+@app.route('/', methods=['GET'])
+def root():
+    """Root endpoint - basic ping"""
+    return jsonify({
+        'status': 'ok',
+        'service': 'SmartTrip API',
+        'message': 'Welcome to SmartTrip API. Use /api/health for detailed status.'
+    }), 200
+
+
 @app.route('/api/health', methods=['GET'])
 def health_check():
     """Health check endpoint"""

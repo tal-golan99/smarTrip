@@ -14,6 +14,10 @@ load_dotenv()
 # Get database URL from environment
 DATABASE_URL = os.getenv('DATABASE_URL', 'postgresql://postgres:password@localhost:5432/smarttrip')
 
+# Render uses postgres:// but SQLAlchemy requires postgresql://
+if DATABASE_URL.startswith('postgres://'):
+    DATABASE_URL = DATABASE_URL.replace('postgres://', 'postgresql://', 1)
+
 # Create engine
 engine = create_engine(
     DATABASE_URL,
