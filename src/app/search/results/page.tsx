@@ -369,9 +369,9 @@ function SearchResultsPageContent() {
                       </p>
                       
                       {/* Guide Name (Hebrew ONLY - Enhanced Styling) */}
-                      {(result?.guide?.name_he || result?.guide?.nameHe) && (
+                      {result?.guide?.name_he && (
                         <p className="text-gray-200 text-sm mb-3 drop-shadow-lg font-medium">
-                          בהדרכה של: <span className="text-white font-bold">{result.guide.name_he || result.guide.nameHe}</span>
+                          בהדרכה של: <span className="text-white font-bold">{result.guide.name_he}</span>
                         </p>
                       )}
                       
