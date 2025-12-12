@@ -64,19 +64,8 @@ export interface Country {
 export interface Guide {
   id: number;
   name: string;
-  /**
-   * Hebrew name (snake_case) - always present in API responses.
-   * Can be null if not set in database.
-   * Backend sends BOTH name_he and nameHe with identical values.
-   * @preferred Use this field for consistency with backend naming.
-   */
-  name_he: string | null;
-  /**
-   * Hebrew name (camelCase) - duplicate of name_he.
-   * @deprecated Backend maintains this for compatibility but it's redundant.
-   * Always has the same value as name_he. Prefer using name_he instead.
-   */
-  nameHe: string | null;
+  name_he: string | null;  // Backend always sends this (can be null)
+  nameHe: string | null;   // Backend sends duplicate for compatibility
   email: string;
   phone?: string;
   gender: string;

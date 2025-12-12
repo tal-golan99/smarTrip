@@ -271,11 +271,9 @@ function SearchResultsPageContent() {
         {results.length === 0 ? (
           <div className="text-center py-16">
             <div className="max-w-2xl mx-auto">
-              <p className="text-[#5a5a5a] text-2xl font-bold mb-4">
-                לצערנו, אין טיולים שמתאימים לקריטריונים שבחרת.
-              </p>
-              <p className="text-[#5a5a5a] text-xl mb-8">
-                אך שתדע שיש לנו <span className="font-bold text-[#076839]">{totalTrips}</span> טיולים באתר.
+              <p className="text-[#5a5a5a] text-xl leading-relaxed mb-8">
+                ההרפתקה שלך עדיין מחכה כאן. אומנם לא מצאנו התאמה מדויקת הפעם, אבל מתוך{' '}
+                <span className="font-bold text-[#076839]">{totalTrips}</span> הטיולים שקיימים באתר – בטוח יש אחד שיתאים בול.
               </p>
               <button
                 onClick={handleBackToSearch}
