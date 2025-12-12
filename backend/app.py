@@ -615,19 +615,7 @@ def get_recommendations():
             # 7. Geography Priority Boost (CRITICAL - 13 pts for direct, 3 pts for continent)
             # This ensures directly selected countries appear FIRST in results
             is_direct_country_match = selected_countries and trip.country_id in selected_countries
-            
-            # Check continent match by comparing enum values
-            is_continent_match = False
-            if selected_continents and trip.country:
-                trip_continent_value = trip.country.continent.value if hasattr(trip.country.continent, 'value') else str(trip.country.continent)
-                # Convert selected continent names to values for comparison
-                for cont_name in selected_continents:
-                    try:
-                        if Continent[cont_name].value == trip_continent_value:
-                            is_continent_match = True
-                            break
-                    except KeyError:
-                        pass
+            is_continent_match = selected_continents and trip.country and trip.country.continent.name in selected_continents
             
             if is_direct_country_match:
                 score += 13
@@ -701,22 +689,34 @@ def internal_error(error):
 
 
 # ============================================
-# AUTO-SEED DATABASE IF EMPTY
+# AUTO-MIGRATION AND AUTO-SEED
 # ============================================
+
+def auto_migrate():
+    """Automatically run pending migrations on startup"""
+    try:
+        print("\n[AUTO-MIGRATE] Checking for pending migrations...")
+        from migrate_add_guide_name_he import migrate
+        migrate()
+        print("[AUTO-MIGRATE] Migration check completed!")
+    except Exception as e:
+        print(f"[AUTO-MIGRATE] Migration check/execution failed: {e}")
+        # Don't crash the app if migration fails (might already be applied)
+        pass
 
 def auto_seed_if_empty():
     """Automatically seed the database if no trips exist"""
     try:
         trip_count = db_session.query(Trip).count()
         if trip_count == 0:
-            print("Database is empty. Auto-seeding...")
+            print("\n[AUTO-SEED] Database is empty. Auto-seeding...")
             from seed import seed_database
             seed_database()
-            print("Auto-seeding completed successfully!")
+            print("[AUTO-SEED] Auto-seeding completed successfully!")
         else:
-            print(f"Database already has {trip_count} trips. Skipping seed.")
+            print(f"[AUTO-SEED] Database already has {trip_count} trips. Skipping seed.")
     except Exception as e:
-        print(f"Auto-seed check failed: {e}")
+        print(f"[AUTO-SEED] Auto-seed check failed: {e}")
         # Don't crash the app if seeding fails
         pass
 
@@ -725,10 +725,11 @@ def auto_seed_if_empty():
 # MAIN
 # ============================================
 
-# Initialize database and auto-seed on module load (for production)
+# Initialize database, run migrations, and auto-seed on module load (for production)
 with app.app_context():
     init_db()
-    auto_seed_if_empty()
+    auto_migrate()  # Run migrations first
+    auto_seed_if_empty()  # Then seed if needed
 
 if __name__ == '__main__':
     # Run Flask development server

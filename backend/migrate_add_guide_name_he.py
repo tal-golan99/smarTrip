@@ -14,6 +14,8 @@ def migrate():
         print("MIGRATION: Adding name_he column to guides table")
         print("=" * 60)
         
+        column_added = False
+        
         # Add column if it doesn't exist
         with engine.connect() as conn:
             # Check if column exists
@@ -25,23 +27,32 @@ def migrate():
             
             if result.fetchone() is None:
                 print("Adding name_he column...")
-                conn.execute(text("ALTER TABLE guides ADD COLUMN name_he VARCHAR(100)"))
-                conn.commit()
-                print("✓ Column added successfully")
+                try:
+                    conn.execute(text("ALTER TABLE guides ADD COLUMN name_he VARCHAR(100)"))
+                    conn.commit()
+                    print("✓ Column added successfully")
+                    column_added = True
+                except Exception as alter_err:
+                    # Column might already exist (race condition or previous failed run)
+                    print(f"⚠ Column add failed (might already exist): {alter_err}")
+                    conn.rollback()
             else:
-                print("✓ Column already exists")
+                print("✓ Column already exists (migration previously applied)")
         
         # Populate name_he with the current name value (which should be Hebrew if properly seeded)
         print("\nPopulating name_he field from name field...")
         
         with engine.connect() as conn:
             result = conn.execute(
-                text("UPDATE guides SET name_he = name WHERE name_he IS NULL")
+                text("UPDATE guides SET name_he = name WHERE name_he IS NULL OR name_he = ''")
             )
             conn.commit()
             updated_count = result.rowcount
         
-        print(f"✓ Updated {updated_count} guides with name_he")
+        if updated_count > 0:
+            print(f"✓ Updated {updated_count} guides with name_he")
+        else:
+            print("✓ All guides already have name_he populated")
         
         # Verify
         with engine.connect() as conn:
@@ -50,13 +61,14 @@ def migrate():
             print(f"\n✓ Total guides with name_he: {count}")
         
         print("\n" + "=" * 60)
-        print("MIGRATION COMPLETED SUCCESSFULLY!")
+        print("MIGRATION COMPLETED SUCCESSFULLY!" if column_added else "MIGRATION ALREADY APPLIED (NO CHANGES NEEDED)")
         print("=" * 60)
         
     except Exception as e:
         print(f"\n✗ Migration failed: {e}")
         session.rollback()
-        raise
+        # Don't raise - allow app to continue even if migration fails
+        print("⚠ App will continue despite migration failure")
     finally:
         session.close()
 
