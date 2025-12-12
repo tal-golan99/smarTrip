@@ -21,16 +21,9 @@ app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'dev-secret-key-change-in-pro
 
 # Enable CORS for Next.js frontend
 # Support multiple origins for development and production
-allowed_origins = [
-    'http://localhost:3000',  # Local development
-    os.getenv('FRONTEND_URL', ''),  # Production frontend URL
-]
-# Remove empty strings
-allowed_origins = [origin for origin in allowed_origins if origin]
-
 CORS(app, resources={
     r"/api/*": {
-        "origins": allowed_origins,
+        "origins": "*",  # Allow all origins for now (can restrict later)
         "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
         "allow_headers": ["Content-Type", "Authorization"]
     }
