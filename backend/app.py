@@ -448,6 +448,16 @@ def get_recommendations():
         if start_date_str:
             user_start_date = datetime.fromisoformat(start_date_str).date()
         
+        # Get total number of trips in database (for UI messaging)
+        total_trips_in_db = db_session.query(Trip).filter(
+            and_(
+                Trip.status != TripStatus.CANCELLED,
+                Trip.spots_left > 0,
+                Trip.start_date >= datetime.now().date()
+            )
+        ).count()
+        print(f"[RECOMMENDATIONS] Total available trips in database: {total_trips_in_db}", flush=True)
+        
         # ========================================
         # STEP A: GEOGRAPHIC FILTERING (UNION LOGIC)
         # ========================================
@@ -523,6 +533,7 @@ def get_recommendations():
                 'count': 0,
                 'data': [],
                 'total_candidates': 0,
+                'total_trips': total_trips_in_db,
                 'message': 'No trips match your criteria'
             }), 200
         
@@ -654,6 +665,7 @@ def get_recommendations():
             'success': True,
             'count': len(top_trips),
             'total_candidates': len(candidates),
+            'total_trips': total_trips_in_db,
             'data': top_trips,
             'message': f'Found {len(top_trips)} recommended trips'
         }), 200

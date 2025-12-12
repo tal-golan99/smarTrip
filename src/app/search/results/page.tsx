@@ -181,10 +181,10 @@ function SearchResultsPageContent() {
         }
 
         const data = await response.json();
-        console.log('API response data:', { success: data.success, count: data.count, resultsLength: data.data?.length });
+        console.log('API response data:', { success: data.success, count: data.count, totalTrips: data.total_trips, resultsLength: data.data?.length });
         
         setResults(data.data || []);
-        setTotalTrips(data.total_candidates || 0);
+        setTotalTrips(data.total_trips || 0);  // Use total_trips (all trips in DB) not total_candidates (filtered count)
       } catch (err) {
         console.error('Search failed:', err);
         console.error('Attempted to fetch from:', `${API_URL}/api/recommendations`);
@@ -272,7 +272,7 @@ function SearchResultsPageContent() {
           <div className="text-center py-16">
             <div className="max-w-2xl mx-auto">
               <p className="text-[#5a5a5a] text-xl leading-relaxed mb-8">
-                ההרפתקה שלך עדיין מחכה כאן. אומנם לא מצאנו התאמה מדויקת הפעם, אבל מתוך{' '}
+                אומנם לא מצאנו התאמה מדויקת הפעם, אבל מתוך{' '}
                 <span className="font-bold text-[#076839]">{totalTrips}</span> הטיולים שקיימים באתר – בטוח יש אחד שיתאים בול.
               </p>
               <button
