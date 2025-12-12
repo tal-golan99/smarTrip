@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { 
   Search, X, ChevronDown, MapPin, Calendar, DollarSign, 
@@ -331,7 +331,7 @@ function TagCircle({
 // MAIN COMPONENT
 // ============================================
 
-export default function SearchPage() {
+function SearchPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   
@@ -944,6 +944,29 @@ export default function SearchPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+// ============================================
+// SUSPENSE WRAPPER FOR NEXT.JS 14 STATIC GENERATION
+// ============================================
+
+function SearchPageLoading() {
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center">
+      <div className="text-center">
+        <Loader2 className="w-12 h-12 text-emerald-400 animate-spin mx-auto mb-4" />
+        <p className="text-white text-lg">Loading...</p>
+      </div>
+    </div>
+  );
+}
+
+export default function SearchPage() {
+  return (
+    <Suspense fallback={<SearchPageLoading />}>
+      <SearchPageContent />
+    </Suspense>
   );
 }
 

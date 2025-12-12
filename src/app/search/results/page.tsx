@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ArrowRight, Loader2, CheckCircle, AlertCircle, Clock, XCircle } from 'lucide-react';
 import clsx from 'clsx';
@@ -107,7 +107,7 @@ const getTripField = (trip: Trip, snakeCase: string, camelCase: string): any => 
   return (trip as any)[snakeCase] || (trip as any)[camelCase];
 };
 
-export default function SearchResultsPage() {
+function SearchResultsPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   
@@ -398,6 +398,29 @@ export default function SearchResultsPage() {
         )}
       </div>
     </div>
+  );
+}
+
+// ============================================
+// SUSPENSE WRAPPER FOR NEXT.JS 14 STATIC GENERATION
+// ============================================
+
+function ResultsPageLoading() {
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center">
+      <div className="text-center">
+        <Loader2 className="w-12 h-12 text-emerald-400 animate-spin mx-auto mb-4" />
+        <p className="text-white text-lg">Loading results...</p>
+      </div>
+    </div>
+  );
+}
+
+export default function SearchResultsPage() {
+  return (
+    <Suspense fallback={<ResultsPageLoading />}>
+      <SearchResultsPageContent />
+    </Suspense>
   );
 }
 

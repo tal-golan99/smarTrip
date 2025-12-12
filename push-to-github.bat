@@ -1,4 +1,5 @@
 @echo off
+chcp 65001 >nul
 echo SmartTrip - GitHub Push Script
 echo ================================
 echo.
@@ -13,7 +14,7 @@ if %errorlevel% neq 0 (
     exit /b 1
 )
 
-echo Git is installed. Proceeding...
+echo [OK] Git is installed. Proceeding...
 echo.
 
 :: Navigate to project directory
