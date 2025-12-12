@@ -19,15 +19,8 @@ load_dotenv()
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'dev-secret-key-change-in-production')
 
-# Enable CORS for Next.js frontend
-# Support multiple origins for development and production
-CORS(app, resources={
-    r"/api/*": {
-        "origins": "*",  # Allow all origins for now (can restrict later)
-        "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-        "allow_headers": ["Content-Type", "Authorization"]
-    }
-})
+# Enable CORS for Next.js frontend - WIDE OPEN for debugging
+CORS(app, resources={r"/api/*": {"origins": "*"}}, supports_credentials=True)
 
 
 # ============================================
@@ -326,17 +319,16 @@ def get_recommendations():
     
     Returns: Top 10 trips with match_score (0-100) and match_details
     """
+    # Log incoming request for debugging (visible in Render logs)
+    print(f"[RECOMMENDATIONS] Incoming request from: {request.remote_addr}", flush=True)
+    print(f"[RECOMMENDATIONS] Request JSON: {request.get_json(silent=True)}", flush=True)
+    
     try:
         from models import TagCategory
         import json
         
         # Get user preferences
         prefs = request.get_json() or {}
-        
-        # #region agent log
-        with open(r'c:\Users\talgo\Documents\פרויקט מערכת המלצות טיולים\trip-recommendations\.cursor\debug.log', 'a', encoding='utf-8') as f:
-            f.write(json.dumps({'location': 'app.py:291', 'message': 'Request received', 'data': {'prefs': prefs}, 'timestamp': datetime.now().timestamp() * 1000, 'sessionId': 'debug-session', 'hypothesisId': 'A'}) + '\n')
-        # #endregion
         
         # Extract preferences with defaults
         selected_countries = prefs.get('selected_countries', [])

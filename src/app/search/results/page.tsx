@@ -5,6 +5,9 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { ArrowRight, Loader2, CheckCircle, AlertCircle, Clock, XCircle } from 'lucide-react';
 import clsx from 'clsx';
 
+// API URL from environment variable (set in Vercel)
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+
 interface Country {
   id: number;
   name: string;
@@ -153,11 +156,11 @@ function SearchResultsPageContent() {
             : undefined,
         };
 
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/922e0c9a-fc2e-4baa-9d6c-cdb2a1ae398a',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'results/page.tsx:156',message:'Sending request to backend',data:{preferences},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'A'})}).catch(()=>{});
-        // #endregion
+        // Log the API URL being used (for debugging)
+        console.log('Fetching recommendations from:', `${API_URL}/api/recommendations`);
+        console.log('Request preferences:', preferences);
 
-        const response = await fetch('http://localhost:5000/api/recommendations', {
+        const response = await fetch(`${API_URL}/api/recommendations`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -165,29 +168,22 @@ function SearchResultsPageContent() {
           body: JSON.stringify(preferences),
         });
 
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/922e0c9a-fc2e-4baa-9d6c-cdb2a1ae398a',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'results/page.tsx:163',message:'Response received',data:{ok:response.ok,status:response.status},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'B'})}).catch(()=>{});
-        // #endregion
+        console.log('Response status:', response.status, response.ok);
 
         if (!response.ok) {
-          // #region agent log
           const errorText = await response.text();
-          fetch('http://127.0.0.1:7242/ingest/922e0c9a-fc2e-4baa-9d6c-cdb2a1ae398a',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'results/page.tsx:167',message:'API error response',data:{status:response.status,errorText},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'B'})}).catch(()=>{});
-          // #endregion
-          throw new Error('Failed to fetch recommendations');
+          console.error('API error response:', response.status, errorText);
+          throw new Error(`Failed to fetch recommendations: ${response.status}`);
         }
 
         const data = await response.json();
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/922e0c9a-fc2e-4baa-9d6c-cdb2a1ae398a',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'results/page.tsx:180',message:'Response data parsed',data:{success:data.success,count:data.count,dataLength:data.data?.length,sampleTrip:data.data?.[0]},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'D'})}).catch(()=>{});
-        // #endregion
+        console.log('API response data:', { success: data.success, count: data.count, resultsLength: data.data?.length });
+        
         setResults(data.data || []);
         setTotalTrips(data.total_candidates || 0);
       } catch (err) {
-        console.error('Error fetching results:', err);
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/922e0c9a-fc2e-4baa-9d6c-cdb2a1ae398a',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'results/page.tsx:187',message:'Frontend error caught',data:{errorMessage:err instanceof Error ? err.message : String(err),errorStack:err instanceof Error ? err.stack : undefined},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'B'})}).catch(()=>{});
-        // #endregion
+        console.error('Search failed:', err);
+        console.error('Attempted to fetch from:', `${API_URL}/api/recommendations`);
         setError('שגיאה בטעינת התוצאות. אנא נסה שוב.');
       } finally {
         setIsLoading(false);
@@ -423,4 +419,3 @@ export default function SearchResultsPage() {
     </Suspense>
   );
 }
-
