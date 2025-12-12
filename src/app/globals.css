@@ -1,0 +1,29 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --black: #000;
+  --title-grey: #5a5a5a;
+  --green-logo: #076839;
+  --green: #076839;
+  --white: white;
+  --turkiz: #12acbe;
+  --link-grey: #7f7f7f;
+  --light-green: #0ba55c;
+  --dark-blue: #0092a3;
+  --line-footer-grey: #b3b3b3;
+  --orange: #ff9402;
+  --light-grey: #e4e4e4;
+  --brown: #402722;
+  --red: #ff2b00;
+}
+
+body {
+  background: #ffffff;
+  color: #5a5a5a;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  color: #5a5a5a;
+}
