@@ -64,6 +64,8 @@ export interface Country {
 export interface Guide {
   id: number;
   name: string;
+  name_he?: string;  // Hebrew name (added for guide display)
+  nameHe?: string;   // Camel case variant
   email: string;
   phone?: string;
   gender: string;
