@@ -60,13 +60,16 @@ const getStatusLabel = (status?: string): string => {
     'FULL': 'מלא',
     'CANCELLED': 'בוטל',
   };
-  return status ? statusMap[status.toUpperCase()] || 'הרשמה פתוחה' : 'הרשמה פתוחה';
+  // Normalize status: uppercase and replace spaces with underscores
+  const statusNormalized = status?.toUpperCase().replace(/\s+/g, '_');
+  return statusNormalized ? statusMap[statusNormalized] || 'הרשמה פתוחה' : 'הרשמה פתוחה';
 };
 
 // Status icon mapping - using image files
 const getStatusIconUrl = (status?: string): string | null => {
-  const statusUpper = status?.toUpperCase();
-  switch (statusUpper) {
+  // Normalize status: uppercase and replace spaces with underscores
+  const statusNormalized = status?.toUpperCase().replace(/\s+/g, '_');
+  switch (statusNormalized) {
     case 'GUARANTEED':
       return '/images/trip status/guaranteed.svg';
     case 'LAST_PLACES':
@@ -82,8 +85,9 @@ const getStatusIconUrl = (status?: string): string | null => {
 
 // Fallback icon mapping (Lucide icons as backup)
 const getStatusIcon = (status?: string) => {
-  const statusUpper = status?.toUpperCase();
-  switch (statusUpper) {
+  // Normalize status: uppercase and replace spaces with underscores
+  const statusNormalized = status?.toUpperCase().replace(/\s+/g, '_');
+  switch (statusNormalized) {
     case 'GUARANTEED':
       return CheckCircle;
     case 'LAST_PLACES':
@@ -203,6 +207,11 @@ function SearchResultsPageContent() {
     }, 100);
   };
 
+  // Navigate to trip detail page
+  const handleTripClick = (tripId: number) => {
+    router.push(`/trip/${tripId}`);
+  };
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-white flex items-center justify-center">
@@ -232,14 +241,29 @@ function SearchResultsPageContent() {
 
   return (
     <div className="min-h-screen bg-[#f8fafc]">
-      {/* Header */}
+      {/* Header with Return Button */}
       <header className="bg-[#076839] text-white py-6 shadow-lg">
         <div className="container mx-auto px-4">
-          <h1 className="text-3xl font-bold text-center text-white">
-            {results.length > 0 
-              ? `נמצאו ${results.length} טיולים מומלצים עבורך` 
-              : 'לא נמצאו טיולים מתאימים'}
-          </h1>
+          <div className="flex items-center justify-between">
+            {/* Spacer for alignment */}
+            <div className="w-32"></div>
+            
+            {/* Title */}
+            <h1 className="text-3xl font-bold text-center text-white flex-1">
+              {results.length > 0 
+                ? `נמצאו ${results.length} טיולים מומלצים עבורך` 
+                : 'לא נמצאו טיולים מתאימים'}
+            </h1>
+            
+            {/* Return to Search Button (Top Right) */}
+            <button
+              onClick={handleBackToSearch}
+              className="flex items-center gap-2 px-4 py-2 bg-white/20 hover:bg-white/30 rounded-lg transition-all"
+            >
+              <ArrowRight className="w-5 h-5" />
+              <span className="text-sm font-medium hidden md:inline">חזור לחיפוש</span>
+            </button>
+          </div>
         </div>
       </header>
 
@@ -269,7 +293,7 @@ function SearchResultsPageContent() {
               {results.map((result, index) => {
                 const trip = result.trip || result;
                 const dynamicImage = getDynamicImage(trip);
-                const tripUrl = `https://www.ayalageo.co.il/trips/${trip?.id || ''}`;
+                const tripId = trip?.id;
                 
                 // Get fields with both naming conventions support
                 const title = getTripField(trip, 'title_he', 'titleHe') || getTripField(trip, 'title', 'title') || 'טיול מומלץ';
@@ -280,11 +304,9 @@ function SearchResultsPageContent() {
                 const spotsLeft = getTripField(trip, 'spots_left', 'spotsLeft');
                 
                 return (
-                  <a
-                    key={trip?.id || index}
-                    href={tripUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
+                  <div
+                    key={tripId || index}
+                    onClick={() => tripId && handleTripClick(tripId)}
                     className="group block relative h-80 rounded-xl overflow-hidden shadow-lg hover:shadow-2xl transition-all duration-500 cursor-pointer"
                   >
                     {/* Background Image */}
@@ -324,11 +346,7 @@ function SearchResultsPageContent() {
                                 className="w-5 h-5"
                                 onError={(e) => {
                                   // Fallback to Lucide icon if image fails
-                                  const StatusIcon = getStatusIcon(trip.status);
                                   e.currentTarget.style.display = 'none';
-                                  const iconElement = document.createElement('div');
-                                  iconElement.innerHTML = `<svg class="w-5 h-5 text-white"></svg>`;
-                                  e.currentTarget.parentElement?.appendChild(iconElement);
                                 }}
                               />
                             );
@@ -350,10 +368,10 @@ function SearchResultsPageContent() {
                         {description}
                       </p>
                       
-                      {/* Guide Name (Hebrew Only) */}
-                      {(result?.guide?.name_he || result?.guide?.name) && (
-                        <p className="text-gray-300 text-sm mb-3 drop-shadow-md">
-                          בהדרכה של: {result.guide.name_he || result.guide.name}
+                      {/* Guide Name (Hebrew ONLY - Enhanced Styling) */}
+                      {(result?.guide?.name_he || result?.guide?.nameHe) && (
+                        <p className="text-gray-200 text-sm mb-3 drop-shadow-lg font-medium">
+                          בהדרכה של: <span className="text-white font-bold">{result.guide.name_he || result.guide.nameHe}</span>
                         </p>
                       )}
                       
@@ -375,7 +393,7 @@ function SearchResultsPageContent() {
                         )}
                       </div>
                     </div>
-                  </a>
+                  </div>
                 );
               })}
             </div>

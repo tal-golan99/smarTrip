@@ -615,7 +615,19 @@ def get_recommendations():
             # 7. Geography Priority Boost (CRITICAL - 13 pts for direct, 3 pts for continent)
             # This ensures directly selected countries appear FIRST in results
             is_direct_country_match = selected_countries and trip.country_id in selected_countries
-            is_continent_match = selected_continents and trip.country and trip.country.continent.name in selected_continents
+            
+            # Check continent match by comparing enum values
+            is_continent_match = False
+            if selected_continents and trip.country:
+                trip_continent_value = trip.country.continent.value if hasattr(trip.country.continent, 'value') else str(trip.country.continent)
+                # Convert selected continent names to values for comparison
+                for cont_name in selected_continents:
+                    try:
+                        if Continent[cont_name].value == trip_continent_value:
+                            is_continent_match = True
+                            break
+                    except KeyError:
+                        pass
             
             if is_direct_country_match:
                 score += 13
