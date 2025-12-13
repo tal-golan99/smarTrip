@@ -242,27 +242,27 @@ function SearchResultsPageContent() {
   return (
     <div className="min-h-screen bg-[#f8fafc]">
       {/* Header with Return Button */}
-      <header className="bg-[#076839] text-white py-6 shadow-lg">
+      <header className="bg-[#076839] text-white py-4 md:py-6 shadow-lg">
         <div className="container mx-auto px-4">
-          <div className="flex items-center justify-between">
-            {/* Spacer for alignment */}
-            <div className="w-32"></div>
+          <div className="flex items-center justify-between gap-2 md:gap-4">
+            {/* Return to Search Button (Top Right in RTL) */}
+            <button
+              onClick={handleBackToSearch}
+              className="flex items-center gap-2 px-3 md:px-4 py-2 bg-white/20 hover:bg-white/30 rounded-lg transition-all flex-shrink-0"
+            >
+              <ArrowRight className="w-4 h-4 md:w-5 md:h-5" />
+              <span className="text-xs md:text-sm font-medium hidden sm:inline">חזור לחיפוש</span>
+            </button>
             
-            {/* Title */}
-            <h1 className="text-3xl font-bold text-center text-white flex-1">
+            {/* Title - Centered and responsive */}
+            <h1 className="text-xl md:text-2xl lg:text-3xl font-bold text-center text-white flex-1">
               {results.length > 0 
                 ? `נמצאו ${results.length} טיולים מומלצים עבורך` 
                 : 'לא נמצאו טיולים מתאימים'}
             </h1>
             
-            {/* Return to Search Button (Top Right) */}
-            <button
-              onClick={handleBackToSearch}
-              className="flex items-center gap-2 px-4 py-2 bg-white/20 hover:bg-white/30 rounded-lg transition-all"
-            >
-              <ArrowRight className="w-5 h-5" />
-              <span className="text-sm font-medium hidden md:inline">חזור לחיפוש</span>
-            </button>
+            {/* Spacer for right alignment balance */}
+            <div className="w-16 sm:w-24 md:w-32 flex-shrink-0"></div>
           </div>
         </div>
       </header>

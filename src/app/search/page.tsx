@@ -489,6 +489,9 @@ function SearchPageContent() {
   const [locationSearch, setLocationSearch] = useState('');
   const [isLocationDropdownOpen, setIsLocationDropdownOpen] = useState(false);
   const [selectedLocations, setSelectedLocations] = useState<LocationSelection[]>([]);
+  
+  // Ref for detecting clicks outside dropdown
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
   // Tag selection state
   const [selectedType, setSelectedType] = useState<number | null>(null);
@@ -550,6 +553,23 @@ function SearchPageContent() {
 
     fetchCountries();
   }, []);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsLocationDropdownOpen(false);
+      }
+    };
+
+    if (isLocationDropdownOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isLocationDropdownOpen]);
 
   // Load state from URL params (for back button) - prevent duplicates
   useEffect(() => {
@@ -746,21 +766,12 @@ function SearchPageContent() {
       {/* Header */}
       <header className="bg-[#076839] text-white py-4 md:py-6 shadow-lg">
         <div className="container mx-auto px-4">
-          <div className="flex flex-col md:flex-row items-center justify-between gap-4">
-            <button
-              onClick={handleClearSearch}
-              disabled={!hasActiveFilters}
-              className={clsx(
-                'px-3 py-2 md:px-4 rounded-lg font-medium transition-all text-sm border order-2 md:order-1',
-                hasActiveFilters
-                  ? 'bg-white text-[#0a192f] border-white hover:bg-gray-50 cursor-pointer shadow-md'
-                  : 'bg-gray-300 text-gray-400 border-gray-300 cursor-not-allowed'
-              )}
-            >
-              ניקוי חיפוש
-            </button>
+          <div className="flex items-center justify-between gap-4">
+            {/* Empty spacer for desktop balance */}
+            <div className="hidden md:block md:w-32"></div>
             
-            <div className="flex-1 text-center order-1 md:order-2">
+            {/* Title - Centered */}
+            <div className="flex-1 text-center">
               <h1 className="text-2xl md:text-3xl font-bold text-white">
                 מצא את הטיול המושלם עבורך
               </h1>
@@ -770,11 +781,11 @@ function SearchPageContent() {
             </div>
             
             {/* Company Logo */}
-            <div className="w-24 md:w-32 flex items-center justify-center md:justify-end order-3">
+            <div className="w-16 md:w-32 flex items-center justify-end">
               <img 
                 src="/images/logo/smartrip.png" 
                 alt="SmartTrip Logo" 
-                className="h-12 md:h-16 w-auto object-contain"
+                className="h-10 md:h-16 w-auto object-contain"
               />
             </div>
           </div>
@@ -782,6 +793,22 @@ function SearchPageContent() {
       </header>
 
       <div className="container mx-auto px-4 py-6 md:py-8 max-w-6xl">
+        {/* Clear Search Button - Positioned below header on mobile */}
+        <div className="mb-4 md:mb-6 flex justify-center">
+          <button
+            onClick={handleClearSearch}
+            disabled={!hasActiveFilters}
+            className={clsx(
+              'px-6 py-3 rounded-lg font-medium transition-all text-sm border',
+              hasActiveFilters
+                ? 'bg-white text-[#0a192f] border-gray-300 hover:bg-gray-50 cursor-pointer shadow-md'
+                : 'bg-gray-200 text-gray-400 border-gray-300 cursor-not-allowed'
+            )}
+          >
+            ניקוי חיפוש
+          </button>
+        </div>
+        
         {/* ============================================ */}
         {/* LOCATION SEARCH */}
         {/* ============================================ */}
@@ -791,8 +818,8 @@ function SearchPageContent() {
             לאן תרצה לנסוע?
           </h2>
 
-          {/* Search Input */}
-          <div className="relative">
+          {/* Search Input and Dropdown Container */}
+          <div className="relative" ref={dropdownRef}>
             <input
               type="text"
               value={locationSearch}
@@ -811,20 +838,19 @@ function SearchPageContent() {
                 isLocationDropdownOpen && 'rotate-180'
               )} />
             </button>
-          </div>
 
-          {/* Dropdown - Full RTL layout */}
-          {isLocationDropdownOpen && (
-            <div className="absolute z-10 w-full max-w-2xl mt-2 bg-white border-2 border-gray-200 rounded-lg shadow-xl max-h-96 overflow-y-auto" dir="rtl">
+            {/* Dropdown - Full RTL layout with mobile optimization */}
+            {isLocationDropdownOpen && (
+              <div className="absolute z-50 left-0 right-0 mt-2 bg-white border-2 border-gray-200 rounded-lg shadow-xl max-h-[70vh] md:max-h-96 overflow-y-auto overscroll-contain" dir="rtl">
               {/* Show matching continents first if searching */}
               {locationSearch && filteredContinents.length > 0 && (
                 <div className="border-b">
-                  <div className="px-4 py-2 bg-gray-100 text-xs font-bold text-gray-600 text-right">יבשות</div>
+                  <div className="px-4 py-3 bg-gray-100 text-sm font-bold text-gray-600 text-right sticky top-0">יבשות</div>
                   {filteredContinents.map(continent => (
                     <button
                       key={continent.value}
                       onClick={() => addLocation('continent', continent.value, continent.value, continent.nameHe)}
-                      className="w-full px-4 py-3 text-right hover:bg-[#12acbe]/10 text-[#076839] font-bold transition-colors text-right"
+                      className="w-full px-5 py-4 md:py-3 text-right hover:bg-[#12acbe]/10 active:bg-[#12acbe]/20 text-[#076839] font-bold transition-colors touch-manipulation"
                     >
                       {continent.nameHe}
                     </button>
@@ -838,13 +864,13 @@ function SearchPageContent() {
                 
                 return (
                   <div key={continent} className="border-b last:border-b-0">
-                    {/* Continent Header - Explicit RTL alignment with text-right */}
+                    {/* Continent Header - RTL with continent name on right, chevron on left */}
                     <button
                       onClick={() => addLocation('continent', continent, continent, continentInfo?.nameHe || continent)}
-                      className="w-full px-4 py-3 bg-gray-50 hover:bg-[#12acbe]/10 font-bold text-[#076839] text-right flex items-center justify-between"
+                      className="w-full px-4 py-3 bg-gray-50 hover:bg-[#12acbe]/10 font-bold text-[#076839] flex items-center justify-between"
                     >
-                      <ChevronDown className="w-4 h-4" />
-                      <span className="text-right">{continentInfo?.nameHe || continent}</span>
+                      <ChevronDown className="w-4 h-4 flex-shrink-0" />
+                      <span className="flex-1 text-right">{continentInfo?.nameHe || continent}</span>
                     </button>
                     
                     {/* Countries */}
@@ -853,7 +879,7 @@ function SearchPageContent() {
                         <button
                           key={country.id}
                           onClick={() => addLocation('country', country.id, country.name, country.nameHe)}
-                          className="w-full px-6 py-2 text-right hover:bg-gray-50 text-[#5a5a5a] hover:text-[#12acbe] transition-colors"
+                          className="w-full px-6 py-3 md:py-2 text-right hover:bg-gray-50 active:bg-gray-100 text-[#5a5a5a] hover:text-[#12acbe] transition-colors touch-manipulation"
                         >
                           {country.nameHe}
                         </button>
@@ -870,8 +896,9 @@ function SearchPageContent() {
                   טוען יעדים...
                 </div>
               )}
-            </div>
-          )}
+              </div>
+            )}
+          </div>
 
           {/* Selected Locations (Circle Badges) - RTL layout with proper overflow handling */}
           {selectedLocations.length > 0 && (

@@ -10,17 +10,72 @@ from dotenv import load_dotenv
 from database import init_db, db_session
 from models import Trip, Country, Guide, Tag, TripTag, TripStatus, TagCategory
 from sqlalchemy import and_, or_
+from sqlalchemy.orm import joinedload, selectinload
 from datetime import datetime, timedelta
 
 # Load environment variables
 load_dotenv()
 
+# ============================================
+# RECOMMENDATION ALGORITHM CONFIGURATION
+# ============================================
+# Centralized scoring weights (out of 100 total points)
+# Modify these values to tune the recommendation algorithm
+
+class RecommendationConfig:
+    """Configuration for the recommendation scoring algorithm"""
+    
+    # Maximum points per category (total = 100)
+    TYPE_MATCH_POINTS = 18          # Trip style match (Safari, Cruise, etc.)
+    THEME_MATCH_FULL_POINTS = 12    # Multiple theme matches
+    THEME_MATCH_PARTIAL_POINTS = 6  # Single theme match
+    DIFFICULTY_PERFECT_POINTS = 13  # Exact difficulty match
+    DIFFICULTY_CLOSE_POINTS = 7     # Within 1 level
+    DIFFICULTY_DEFAULT_POINTS = 7   # No preference specified
+    DURATION_IDEAL_POINTS = 11      # Within specified range
+    DURATION_GOOD_POINTS = 7        # Within 2 days of range
+    DURATION_ACCEPTABLE_POINTS = 4  # Within 5 days of range
+    BUDGET_PERFECT_POINTS = 11      # Within budget
+    BUDGET_GOOD_POINTS = 7          # Within 110% of budget
+    BUDGET_ACCEPTABLE_POINTS = 4    # Within 120% of budget
+    
+    # Business logic bonuses (can stack, max 22 total)
+    STATUS_GUARANTEED_POINTS = 7
+    STATUS_LAST_PLACES_POINTS = 15
+    DEPARTING_SOON_POINTS = 7       # Leaves within 30 days
+    
+    # Geography priority boost
+    DIRECT_COUNTRY_MATCH_POINTS = 13
+    CONTINENT_MATCH_POINTS = 3
+    
+    # Filtering thresholds
+    DIFFICULTY_TOLERANCE = 1        # Allow ±1 difficulty level
+    BUDGET_MAX_MULTIPLIER = 1.3     # Allow up to 30% over budget
+    DURATION_CLOSE_DAYS = 2         # "Good" duration within ±2 days
+    DURATION_ACCEPTABLE_DAYS = 5    # "Acceptable" within ±5 days
+    DEPARTING_SOON_DAYS = 30        # Bonus for trips in next 30 days
+    
+    # Result limits
+    MAX_RESULTS = 10                # Return top 10 recommendations
+    THEME_MATCH_THRESHOLD = 2       # Need 2+ themes for full points
+
 # Initialize Flask app
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'dev-secret-key-change-in-production')
 
-# Enable CORS for Next.js frontend - WIDE OPEN for debugging
-CORS(app, resources={r"/api/*": {"origins": "*"}}, supports_credentials=True)
+# Configure CORS - Secure by default, configurable via environment
+# Set ALLOWED_ORIGINS in .env as comma-separated list: "https://example.com,https://app.example.com"
+allowed_origins = os.getenv('ALLOWED_ORIGINS', 'http://localhost:3000').split(',')
+allowed_origins = [origin.strip() for origin in allowed_origins]  # Clean whitespace
+
+CORS(app, resources={
+    r"/api/*": {
+        "origins": allowed_origins,
+        "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+        "allow_headers": ["Content-Type", "Authorization"],
+        "supports_credentials": True
+    }
+})
 
 
 # ============================================
@@ -461,7 +516,12 @@ def get_recommendations():
         # ========================================
         # STEP A: GEOGRAPHIC FILTERING (UNION LOGIC)
         # ========================================
-        query = db_session.query(Trip)
+        # PERFORMANCE FIX: Eagerly load relationships to avoid N+1 queries
+        query = db_session.query(Trip).options(
+            joinedload(Trip.country),           # Load country data
+            joinedload(Trip.guide),             # Load guide data
+            selectinload(Trip.trip_tags).joinedload(TripTag.tag)  # Load tags efficiently
+        )
         
         # NEW LOGIC: If both countries AND continents are selected, include BOTH (OR/UNION)
         # Example: User selects "Argentina" + "Asia" → Show Argentina trips + All Asia trips
@@ -506,19 +566,20 @@ def get_recommendations():
         
         # HARD FILTER: Difficulty (if user specified)
         if difficulty is not None:
-            # Exclude trips that are off by 2+ levels
+            # Exclude trips that are off by tolerance level
+            tolerance = RecommendationConfig.DIFFICULTY_TOLERANCE
             query = query.filter(
                 and_(
-                    Trip.difficulty_level >= difficulty - 1,
-                    Trip.difficulty_level <= difficulty + 1
+                    Trip.difficulty_level >= difficulty - tolerance,
+                    Trip.difficulty_level <= difficulty + tolerance
                 )
             )
-            print(f"[RECOMMENDATIONS] Applied difficulty filter: {difficulty} ±1", flush=True)
+            print(f"[RECOMMENDATIONS] Applied difficulty filter: {difficulty} ±{tolerance}", flush=True)
         
         # HARD FILTER: Budget (if user specified)
         if budget:
-            # Exclude trips more than 30% over budget
-            max_price = budget * 1.3
+            # Exclude trips beyond budget multiplier threshold
+            max_price = budget * RecommendationConfig.BUDGET_MAX_MULTIPLIER
             query = query.filter(Trip.price <= max_price)
             print(f"[RECOMMENDATIONS] Applied budget filter: max ${max_price}", flush=True)
         
@@ -540,100 +601,100 @@ def get_recommendations():
         # ========================================
         # STEP B: WEIGHTED SCORING (100 points MAX - NORMALIZED)
         # ========================================
+        config = RecommendationConfig  # Alias for cleaner code
         scored_trips = []
         
         for trip in candidates:
             score = 0
             match_details = []
             
-            # Get trip's tags by category
+            # Get trip's tags by category (relationships already loaded via joinedload - no N+1 queries)
             trip_type_tags = [tt.tag_id for tt in trip.trip_tags if tt.tag.category == TagCategory.TYPE]
             trip_theme_tags = [tt.tag_id for tt in trip.trip_tags if tt.tag.category == TagCategory.THEME]
             
-            # 1. TYPE Match (18 pts) - The "Style"
+            # 1. TYPE Match - The "Style"
             if preferred_type_id and preferred_type_id in trip_type_tags:
-                score += 18
+                score += config.TYPE_MATCH_POINTS
                 match_details.append("Perfect Style Match")
             
-            # 2. THEME Match (12 pts) - The "Content"
+            # 2. THEME Match - The "Content"
             if preferred_theme_ids:
                 theme_matches = len(set(trip_theme_tags) & set(preferred_theme_ids))
-                if theme_matches >= 2:
-                    score += 12
+                if theme_matches >= config.THEME_MATCH_THRESHOLD:
+                    score += config.THEME_MATCH_FULL_POINTS
                     match_details.append(f"Excellent Theme Match ({theme_matches} interests)")
                 elif theme_matches == 1:
-                    score += 6
+                    score += config.THEME_MATCH_PARTIAL_POINTS
                     match_details.append("Good Theme Match")
             
-            # 3. Difficulty Match (13 pts) - NOW HARD FILTERED (only ±1 level remains)
+            # 3. Difficulty Match - HARD FILTERED (only within tolerance remains)
             if difficulty is not None:
                 diff_deviation = abs(trip.difficulty_level - difficulty)
                 if diff_deviation == 0:
-                    score += 13
+                    score += config.DIFFICULTY_PERFECT_POINTS
                     match_details.append("Perfect Difficulty Level")
-                elif diff_deviation == 1:
-                    score += 7
+                elif diff_deviation <= config.DIFFICULTY_TOLERANCE:
+                    score += config.DIFFICULTY_CLOSE_POINTS
                     match_details.append("Close Difficulty Level")
-                # No else: trips off by 2+ are already filtered out
             else:
                 # No difficulty preference - give baseline points to all trips
-                score += 7
+                score += config.DIFFICULTY_DEFAULT_POINTS
             
-            # 4. Duration Match (11 pts) - NOW HARD FILTERED (must be in range)
+            # 4. Duration Match
             trip_duration = (trip.end_date - trip.start_date).days
-            # Trips outside duration range are filtered out below
             if min_duration <= trip_duration <= max_duration:
-                score += 11
+                score += config.DURATION_IDEAL_POINTS
                 match_details.append("Ideal Duration")
-            elif abs(trip_duration - min_duration) <= 2 or abs(trip_duration - max_duration) <= 2:
-                score += 7
+            elif abs(trip_duration - min_duration) <= config.DURATION_CLOSE_DAYS or \
+                 abs(trip_duration - max_duration) <= config.DURATION_CLOSE_DAYS:
+                score += config.DURATION_GOOD_POINTS
                 match_details.append("Good Duration")
-            elif abs(trip_duration - min_duration) <= 5 or abs(trip_duration - max_duration) <= 5:
-                score += 4
+            elif abs(trip_duration - min_duration) <= config.DURATION_ACCEPTABLE_DAYS or \
+                 abs(trip_duration - max_duration) <= config.DURATION_ACCEPTABLE_DAYS:
+                score += config.DURATION_ACCEPTABLE_POINTS
             else:
                 # Outside acceptable range - SKIP this trip
                 continue
             
-            # 5. Budget Match (11 pts) - NOW HARD FILTERED (max +30%)
+            # 5. Budget Match - HARD FILTERED (max over budget already applied)
             if budget:
                 trip_price = float(trip.price)
                 if trip_price <= budget:
-                    score += 11
+                    score += config.BUDGET_PERFECT_POINTS
                     match_details.append("Within Budget")
                 elif trip_price <= budget * 1.1:
-                    score += 7
+                    score += config.BUDGET_GOOD_POINTS
                     match_details.append("Slightly Over Budget")
                 elif trip_price <= budget * 1.2:
-                    score += 4
+                    score += config.BUDGET_ACCEPTABLE_POINTS
                     match_details.append("Close to Budget")
-                # Trips over 30% budget are already filtered out
+                # Trips over max multiplier are already filtered out
             
-            # 6. Business Logic (22 pts MAX - NORMALIZED)
-            # Status-based scoring
+            # 6. Business Logic - Status-based scoring
             if trip.status == TripStatus.GUARANTEED:
-                score += 7
-                match_details.append("Guaranteed Departure (+7)")
+                score += config.STATUS_GUARANTEED_POINTS
+                match_details.append(f"Guaranteed Departure (+{config.STATUS_GUARANTEED_POINTS})")
             elif trip.status == TripStatus.LAST_PLACES:
-                score += 15
-                match_details.append("Last Places Available (+15)")
+                score += config.STATUS_LAST_PLACES_POINTS
+                match_details.append(f"Last Places Available (+{config.STATUS_LAST_PLACES_POINTS})")
             
             # Departing soon bonus (can stack with status)
             days_until_departure = (trip.start_date - today).days
-            if days_until_departure <= 30:
-                score += 7
-                match_details.append("Departing Soon (+7)")
+            if days_until_departure <= config.DEPARTING_SOON_DAYS:
+                score += config.DEPARTING_SOON_POINTS
+                match_details.append(f"Departing Soon (+{config.DEPARTING_SOON_POINTS})")
             
-            # 7. Geography Priority Boost (CRITICAL - 13 pts for direct, 3 pts for continent)
+            # 7. Geography Priority Boost
             # This ensures directly selected countries appear FIRST in results
             is_direct_country_match = selected_countries and trip.country_id in selected_countries
             is_continent_match = selected_continents and trip.country and trip.country.continent.name in selected_continents
             
             if is_direct_country_match:
-                score += 13
-                match_details.append("Direct Country Match (+13)")
+                score += config.DIRECT_COUNTRY_MATCH_POINTS
+                match_details.append(f"Direct Country Match (+{config.DIRECT_COUNTRY_MATCH_POINTS})")
             elif is_continent_match:
-                score += 3
-                match_details.append("Continent Match (+3)")
+                score += config.CONTINENT_MATCH_POINTS
+                match_details.append(f"Continent Match (+{config.CONTINENT_MATCH_POINTS})")
             
             # Add to results with start_date for secondary sorting
             try:
@@ -647,15 +708,15 @@ def get_recommendations():
                 raise
         
         # ========================================
-        # STEP C: SORT WITH TIE-BREAKING AND RETURN TOP 10
+        # STEP C: SORT WITH TIE-BREAKING AND RETURN TOP RESULTS
         # ========================================
         # Primary: match_score (descending - highest first)
         # Secondary: start_date (ascending - soonest first)
         scored_trips.sort(key=lambda x: (-x['match_score'], x['_sort_date']))
         
-        # Remove internal sort field and get top 10
+        # Remove internal sort field and get top N results
         top_trips = []
-        for trip in scored_trips[:10]:
+        for trip in scored_trips[:config.MAX_RESULTS]:
             trip.pop('_sort_date', None)
             top_trips.append(trip)
         
@@ -704,18 +765,6 @@ def internal_error(error):
 # AUTO-MIGRATION AND AUTO-SEED
 # ============================================
 
-def auto_migrate():
-    """Automatically run pending migrations on startup"""
-    try:
-        print("\n[AUTO-MIGRATE] Checking for pending migrations...")
-        from migrate_add_guide_name_he import migrate
-        migrate()
-        print("[AUTO-MIGRATE] Migration check completed!")
-    except Exception as e:
-        print(f"[AUTO-MIGRATE] Migration check/execution failed: {e}")
-        # Don't crash the app if migration fails (might already be applied)
-        pass
-
 def auto_seed_if_empty():
     """Automatically seed the database if no trips exist"""
     try:
@@ -737,11 +786,10 @@ def auto_seed_if_empty():
 # MAIN
 # ============================================
 
-# Initialize database, run migrations, and auto-seed on module load (for production)
+# Initialize database and auto-seed on module load (for production)
 with app.app_context():
     init_db()
-    auto_migrate()  # Run migrations first
-    auto_seed_if_empty()  # Then seed if needed
+    auto_seed_if_empty()
 
 if __name__ == '__main__':
     # Run Flask development server

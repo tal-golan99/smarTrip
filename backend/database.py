@@ -44,17 +44,3 @@ def drop_db():
     """Drop all database tables (use with caution!)"""
     Base.metadata.drop_all(bind=engine)
     print("WARNING: All database tables dropped!")
-
-
-def get_db():
-    """
-    Dependency function to get database session
-    Use this in Flask routes to get a database session
-    """
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
-
-
