@@ -64,8 +64,6 @@ export interface Country {
 export interface Guide {
   id: number;
   name: string;
-  name_he: string | null;  // Backend always sends this (can be null)
-  nameHe: string | null;   // Backend sends duplicate for compatibility
   email: string;
   phone?: string;
   gender: string;

@@ -69,3 +69,15 @@ debug.log
 backend/venv/
 backend/.env
 backend/__pycache__/
+
+# Development notes and temporary files
+*_SUMMARY.md
+*_COMPLETE.md
+*_UPDATES.md
+*_FIXES.md
+*_GUIDE.md
+*_STATUS.md
+*_REFERENCE.md
+*.bat
+migrate_*.py
+*-test/
