@@ -184,6 +184,56 @@ def manual_seed():
         }), 500
 
 
+@app.route('/api/migrate', methods=['POST'])
+def migrate_database():
+    """
+    Migrate database schema and reseed data.
+    WARNING: This drops all existing tables and recreates them.
+    Use this when schema changes and you need to update production database.
+    """
+    try:
+        from database import drop_db, init_db
+        from seed import seed_database
+        
+        print("[MIGRATE] Starting database migration...", flush=True)
+        
+        # Drop all tables
+        print("[MIGRATE] Dropping existing tables...", flush=True)
+        drop_db()
+        
+        # Recreate tables with new schema
+        print("[MIGRATE] Creating tables with new schema...", flush=True)
+        init_db()
+        
+        # Seed data
+        print("[MIGRATE] Seeding database with data...", flush=True)
+        seed_database()
+        
+        # Verify
+        trip_count = db_session.query(Trip).count()
+        country_count = db_session.query(Country).count()
+        
+        print(f"[MIGRATE] Migration complete! Trips: {trip_count}, Countries: {country_count}", flush=True)
+        
+        return jsonify({
+            'success': True,
+            'message': 'Database migrated and seeded successfully',
+            'data': {
+                'trips': trip_count,
+                'countries': country_count
+            }
+        }), 200
+    except Exception as e:
+        import traceback
+        error_trace = traceback.format_exc()
+        print(f"[MIGRATE] Error: {error_trace}", flush=True)
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'details': error_trace
+        }), 500
+
+
 # ============================================
 # LOCATIONS API (Countries + Continents for Frontend)
 # ============================================

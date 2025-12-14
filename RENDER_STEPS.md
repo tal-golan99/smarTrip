@@ -32,16 +32,23 @@ Replace `YOUR-BACKEND-URL` with your actual Render URL (find it in Render dashbo
 }
 ```
 
-### If you see trips: 0, countries: 0, etc.
+### If you see trips: 0, countries: 0, etc. OR errors about missing columns
 
-Your database is empty. You need to seed it.
+Your database needs to be migrated and seeded.
 
 **Run this command in your terminal (PowerShell):**
 ```powershell
-curl -X POST https://YOUR-BACKEND-URL.onrender.com/api/seed
+curl -X POST https://YOUR-BACKEND-URL.onrender.com/api/migrate
 ```
 
-Wait 2-3 minutes, then check `/api/health` again. Numbers should now show 587 trips, etc.
+This will:
+1. Drop old tables (if they exist)
+2. Create new tables with correct schema
+3. Seed with 587 trips and all data
+
+Wait 2-3 minutes (seeding takes time), then check `/api/health` again. Numbers should now show 587 trips, etc.
+
+**Note:** This is safe to run - it will recreate all data fresh.
 
 ## Step 3: Update Environment Variable (if needed)
 
