@@ -186,56 +186,68 @@ def seed_database():
         # ============================================
         print("[SEEDING] Trip Types (Foreign Key Model)...")
         
+        # Use EXPLICIT IDs to ensure consistency across environments
         trip_types_data = [
-            ('Geographic Depth', 'טיולי עומק גיאוגרפיים', 'In-depth geographical exploration tours'),
-            ('Carnivals & Festivals', 'קרנבלים ופסטיבלים', 'Cultural carnivals and festivals'),
-            ('African Safari', 'ספארי באפריקה', 'Wildlife safari adventures in Africa'),
-            ('Train Tours', 'טיולי רכבות', 'Scenic railway journeys'),
-            ('Geographic Cruises', 'טיולי שייט גיאוגרפיים', 'Maritime exploration cruises'),
-            ('Nature Hiking', 'טיולי הליכות בטבע', 'Nature walks and hiking'),
-            ('Jeep Tours', 'טיולי ג\'יפים', '4x4 off-road adventures'),
-            ('Snowmobile Tours', 'טיולי אופנועי שלג', 'Arctic snowmobile expeditions'),
-            ('Private Groups', 'קבוצות סגורות', 'Exclusive private group tours'),
-            ('Photography', 'טיולי צילום', 'Photography-focused tours'),
+            (1, 'Geographic Depth', 'טיולי עומק גיאוגרפיים', 'In-depth geographical exploration tours'),
+            (2, 'Carnivals & Festivals', 'קרנבלים ופסטיבלים', 'Cultural carnivals and festivals'),
+            (3, 'African Safari', 'ספארי באפריקה', 'Wildlife safari adventures in Africa'),
+            (4, 'Train Tours', 'טיולי רכבות', 'Scenic railway journeys'),
+            (5, 'Geographic Cruises', 'טיולי שייט גיאוגרפיים', 'Maritime exploration cruises'),
+            (6, 'Nature Hiking', 'טיולי הליכות בטבע', 'Nature walks and hiking'),
+            (7, 'Jeep Tours', 'טיולי ג\'יפים', '4x4 off-road adventures'),
+            (8, 'Snowmobile Tours', 'טיולי אופנועי שלג', 'Arctic snowmobile expeditions'),
+            (9, 'Photography', 'טיולי צילום', 'Photography-focused tours'),
+            (10, 'Private Groups', 'קבוצות סגורות', 'Exclusive private group tours'),
         ]
         
-        for name, name_he, description in trip_types_data:
-            existing = session.query(TripType).filter(TripType.name == name).first()
+        for type_id, name, name_he, description in trip_types_data:
+            existing = session.query(TripType).filter(TripType.id == type_id).first()
             if not existing:
-                trip_type = TripType(name=name, name_he=name_he, description=description)
+                trip_type = TripType(id=type_id, name=name, name_he=name_he, description=description)
                 session.add(trip_type)
+            else:
+                # Update existing to ensure correct names
+                existing.name = name
+                existing.name_he = name_he
+                existing.description = description
         
         session.commit()
         type_count = session.query(TripType).count()
-        print(f"SUCCESS: Seeded {type_count} Trip Types (Foreign Key)\n")
+        print(f"SUCCESS: Seeded {type_count} Trip Types with consistent IDs (Foreign Key)\n")
         
         # ============================================
         # SEED THEME TAGS (THEME Category Only)
         # ============================================
         print("[SEEDING] Theme Tags (THEME Category Only)...")
         
+        # Use EXPLICIT IDs to ensure consistency across environments
         theme_tags_data = [
-            ('Cultural & Historical', 'תרבות והיסטוריה', 'Cultural immersion and historical heritage sites'),
-            ('Wildlife', 'חיות בר', 'Wildlife observation tours'),
-            ('Extreme', 'אקסטרים', 'Extreme adventure and challenge'),
-            ('Food & Wine', 'אוכל ויין', 'Culinary and wine tours'),
-            ('Beach & Island', 'חופים ואיים', 'Beach and island getaways'),
-            ('Mountain', 'הרים', 'Mountain expeditions'),
-            ('Desert', 'מדבר', 'Desert exploration'),
-            ('Arctic & Snow', 'קרח ושלג', 'Arctic and winter expeditions'),
-            ('Tropical', 'טרופי', 'Tropical destinations'),
-            ('Hanukkah & Christmas Lights', 'אורות חנוכה וכריסמס', 'Holiday lights and festive tours'),
+            (1, 'Cultural & Historical', 'תרבות והיסטוריה', 'Cultural immersion and historical heritage sites'),
+            (2, 'Wildlife', 'חיות בר', 'Wildlife observation tours'),
+            (3, 'Extreme', 'אקסטרים', 'Extreme adventure and challenge'),
+            (4, 'Food & Wine', 'אוכל ויין', 'Culinary and wine tours'),
+            (5, 'Beach & Island', 'חופים ואיים', 'Beach and island getaways'),
+            (6, 'Mountain', 'הרים', 'Mountain expeditions'),
+            (7, 'Desert', 'מדבר', 'Desert exploration'),
+            (8, 'Arctic & Snow', 'קרח ושלג', 'Arctic and winter expeditions'),
+            (9, 'Tropical', 'טרופי', 'Tropical destinations'),
+            (11, 'Hanukkah & Christmas Lights', 'אורות חנוכה וכריסמס', 'Holiday lights and festive tours'),
         ]
         
-        for name, name_he, description in theme_tags_data:
-            existing = session.query(Tag).filter(Tag.name == name).first()
+        for tag_id, name, name_he, description in theme_tags_data:
+            existing = session.query(Tag).filter(Tag.id == tag_id).first()
             if not existing:
-                tag = Tag(name=name, name_he=name_he, description=description, category=TagCategory.THEME)
+                tag = Tag(id=tag_id, name=name, name_he=name_he, description=description, category=TagCategory.THEME)
                 session.add(tag)
+            else:
+                # Update existing to ensure correct names
+                existing.name = name
+                existing.name_he = name_he
+                existing.description = description
         
         session.commit()
         theme_count = session.query(Tag).count()
-        print(f"SUCCESS: Seeded {theme_count} Theme Tags\n")
+        print(f"SUCCESS: Seeded {theme_count} Theme Tags with consistent IDs\n")
         
         # ============================================
         # SEED GUIDES (5 Specific + 20 Generated)
