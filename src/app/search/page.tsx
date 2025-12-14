@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { 
   Search, X, ChevronDown, MapPin, Calendar, DollarSign, 
   TrendingUp, Compass, Ship, Camera, Mountain, Palmtree,
-  Plane, Train, Users, Snowflake, Car, Sparkles, Globe,
+  Plane, Train, Users, Users2, Snowflake, Car, Sparkles, Globe,
   Utensils, Landmark, TreePine, Waves, Sun, PawPrint, Loader2
 } from 'lucide-react';
 import clsx from 'clsx';
@@ -94,14 +94,15 @@ const FALLBACK_COUNTRIES: Country[] = [
 
 const MOCK_TYPE_TAGS: Tag[] = [
   { id: 1, name: 'Geographic Depth', nameHe: 'טיולי עומק גיאוגרפיים', category: 'Type' },
-  { id: 3, name: 'Carnivals & Festivals', nameHe: 'טיולי קרנבלים ופסטיבלים', category: 'Type' },
-  { id: 4, name: 'African Safari', nameHe: 'טיולי ספארי אפריקה', category: 'Type' },
-  { id: 5, name: 'Train Tours', nameHe: 'טיולי רכבות', category: 'Type' },
-  { id: 6, name: 'Geographic Cruises', nameHe: 'טיולי שייט גיאוגרפיים', category: 'Type' },
-  { id: 7, name: 'Nature Hiking', nameHe: 'טיולי הליכות בטבע', category: 'Type' },
-  { id: 9, name: 'Jeep Tours', nameHe: 'טיולי ג\'יפים', category: 'Type' },
-  { id: 10, name: 'Snowmobile Tours', nameHe: 'טיולי אופנועי שלג', category: 'Type' },
-  { id: 12, name: 'Photography', nameHe: 'צילום', category: 'Type' },
+  { id: 2, name: 'Carnivals & Festivals', nameHe: 'קרנבלים ופסטיבלים', category: 'Type' },
+  { id: 3, name: 'African Safari', nameHe: 'ספארי באפריקה', category: 'Type' },
+  { id: 4, name: 'Train Tours', nameHe: 'טיולי רכבות', category: 'Type' },
+  { id: 5, name: 'Geographic Cruises', nameHe: 'טיולי שייט גיאוגרפיים', category: 'Type' },
+  { id: 6, name: 'Nature Hiking', nameHe: 'טיולי הליכות בטבע', category: 'Type' },
+  { id: 8, name: 'Jeep Tours', nameHe: 'טיולי ג\'יפים', category: 'Type' },
+  { id: 9, name: 'Snowmobile Tours', nameHe: 'טיולי אופנועי שלג', category: 'Type' },
+  { id: 10, name: 'Private Groups', nameHe: 'קבוצות סגורות', category: 'Type' },
+  { id: 11, name: 'Photography', nameHe: 'טיולי צילום', category: 'Type' },
 ];
 
 const MOCK_THEME_TAGS: Tag[] = [
@@ -142,6 +143,7 @@ const TYPE_ICONS: Record<string, any> = {
   'Nature Hiking': Mountain,
   'Jeep Tours': Car,
   'Snowmobile Tours': Snowflake,
+  'Private Groups': Users2,
   'Photography': Camera,
 };
 
@@ -526,6 +528,11 @@ function SearchPageContent() {
            difficulty !== null;
   }, [selectedLocations, selectedType, selectedThemes, selectedYear, selectedMonth, minDuration, maxDuration, maxBudget, difficulty]);
 
+  // Scroll to top on mount
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'instant' });
+  }, []);
+
   // Fetch countries from API on mount
   useEffect(() => {
     const fetchCountries = async () => {
@@ -793,8 +800,8 @@ function SearchPageContent() {
       </header>
 
       <div className="container mx-auto px-4 py-6 md:py-8 max-w-6xl">
-        {/* Clear Search Button - Positioned below header on mobile */}
-        <div className="mb-4 md:mb-6 flex justify-center">
+        {/* Clear Search Button - Positioned top right */}
+        <div className="mb-4 md:mb-6 flex justify-start">
           <button
             onClick={handleClearSearch}
             disabled={!hasActiveFilters}

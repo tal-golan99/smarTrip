@@ -21,6 +21,12 @@ interface Guide {
   name_he?: string;
 }
 
+interface TripType {
+  id: number;
+  name: string;
+  name_he?: string;
+}
+
 interface Trip {
   id: number;
   title?: string;
@@ -36,6 +42,8 @@ interface Trip {
   difficulty_level?: number;
   country?: Country;
   guide?: Guide;
+  trip_type?: TripType;
+  trip_type_id?: number;
 }
 
 // Helper to get trip field with both snake_case and camelCase support
@@ -241,6 +249,8 @@ export default function TripPage() {
   const countryName = trip.country?.name_he || trip.country?.name || '';
   const difficultyLevel = getTripField(trip, 'difficulty_level', 'difficultyLevel');
   const spotsLeft = getTripField(trip, 'spots_left', 'spotsLeft');
+  const tripType = (trip as any).type || (trip as any).trip_type;
+  const isPrivateGroup = tripType?.name === 'Private Groups' || tripType?.nameHe === 'קבוצות פרטיות';
 
   return (
     <div className="min-h-screen bg-white flex flex-col">
@@ -306,7 +316,9 @@ export default function TripPage() {
           <div className="bg-gray-50 rounded-xl p-4 text-center">
             <Clock className="w-6 h-6 text-[#12acbe] mx-auto mb-2" />
             <p className="text-xs text-gray-500 mb-1">משך הטיול</p>
-            <p className="text-sm font-bold text-[#5a5a5a]">{duration} ימים</p>
+            <p className="text-sm font-bold text-[#5a5a5a]">
+              {isPrivateGroup ? 'ניתן לקבוע מול המדריך' : `${duration} ימים`}
+            </p>
           </div>
           
           {/* Price */}

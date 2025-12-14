@@ -128,15 +128,48 @@ class Guide(Base):
         }
 
 
+class TripType(Base):
+    """Trip Types table - stores trip style categories (formerly Type tags)"""
+    __tablename__ = 'trip_types'
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    name = Column(String(100), unique=True, nullable=False, index=True)
+    name_he = Column(String(100), nullable=False)  # Hebrew name
+    description = Column(Text)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    
+    # Relationships
+    trips = relationship('Trip', back_populates='type')
+    
+    def __repr__(self):
+        return f"<TripType(id={self.id}, name='{self.name}')>"
+    
+    def to_dict(self):
+        """Convert model to dictionary for JSON serialization"""
+        return {
+            'id': self.id,
+            'name': self.name,
+            'nameHe': self.name_he,
+            'description': self.description,
+            'createdAt': self.created_at.isoformat() if self.created_at else None,
+            'updatedAt': self.updated_at.isoformat() if self.updated_at else None,
+        }
+
+
 class Tag(Base):
-    """Tags table - stores trip type/category tags"""
+    """Tags table - stores trip theme tags (THEME category only)
+    
+    Note: After migration, this table only contains THEME tags.
+    TYPE tags have been moved to the trip_types table.
+    """
     __tablename__ = 'tags'
     
     id = Column(Integer, primary_key=True, autoincrement=True)
     name = Column(String(100), unique=True, nullable=False, index=True)
     name_he = Column(String(100), nullable=False)  # Hebrew name
     description = Column(Text)
-    category = Column(Enum(TagCategory), nullable=False, index=True)  # TYPE or THEME
+    category = Column(Enum(TagCategory), nullable=False, index=True)  # Should always be THEME after migration
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
     
@@ -177,14 +210,19 @@ class Trip(Base):
     spots_left = Column(Integer, nullable=False)
     status = Column(Enum(TripStatus), default=TripStatus.OPEN, nullable=False, index=True)
     difficulty_level = Column(SmallInteger, nullable=False, index=True)  # 1=Easy, 2=Moderate, 3=Hard
+    
+    # Foreign Keys
     country_id = Column(Integer, ForeignKey('countries.id', ondelete='RESTRICT'), nullable=False, index=True)
     guide_id = Column(Integer, ForeignKey('guides.id', ondelete='RESTRICT'), nullable=False, index=True)
+    trip_type_id = Column(Integer, ForeignKey('trip_types.id', ondelete='RESTRICT'), nullable=True, index=True)  # Nullable for migration safety
+    
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
     
     # Relationships
     country = relationship('Country', back_populates='trips')
     guide = relationship('Guide', back_populates='trips')
+    type = relationship('TripType', back_populates='trips', lazy='joined')  # Eager load for performance
     trip_tags = relationship('TripTag', back_populates='trip', cascade='all, delete-orphan')
     
     # Additional indexes for query optimization
@@ -214,6 +252,7 @@ class Trip(Base):
             'difficultyLevel': self.difficulty_level,
             'countryId': self.country_id,
             'guideId': self.guide_id,
+            'tripTypeId': self.trip_type_id,
             'createdAt': self.created_at.isoformat() if self.created_at else None,
             'updatedAt': self.updated_at.isoformat() if self.updated_at else None,
         }
@@ -221,7 +260,8 @@ class Trip(Base):
         if include_relations:
             data['country'] = self.country.to_dict() if self.country else None
             data['guide'] = self.guide.to_dict() if self.guide else None
-            data['tags'] = [tt.tag.to_dict() for tt in self.trip_tags]
+            data['type'] = self.type.to_dict() if self.type else None  # Include trip type
+            data['tags'] = [tt.tag.to_dict() for tt in self.trip_tags]  # Now only themes
         
         return data
 

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, Suspense } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ArrowRight, Loader2, CheckCircle, AlertCircle, Clock, XCircle } from 'lucide-react';
 import clsx from 'clsx';
@@ -50,6 +50,29 @@ interface SearchResult {
   match_details: string[];
   guide?: Guide;
 }
+
+interface ScoreThresholds {
+  HIGH: number;
+  MID: number;
+}
+
+// Score color coding helper
+const getScoreColor = (score: number, thresholds: ScoreThresholds): 'high' | 'mid' | 'low' => {
+  if (score >= thresholds.HIGH) return 'high';
+  if (score >= thresholds.MID) return 'mid';
+  return 'low';
+};
+
+const getScoreBgClass = (colorLevel: 'high' | 'mid' | 'low'): string => {
+  switch (colorLevel) {
+    case 'high':
+      return 'bg-[#12acbe]';  // Turquoise - excellent
+    case 'mid':
+      return 'bg-[#f59e0b]';  // Orange - medium
+    case 'low':
+      return 'bg-[#ef4444]';  // Red - low
+  }
+};
 
 // Status translation to Hebrew
 const getStatusLabel = (status?: string): string => {
@@ -122,11 +145,15 @@ function SearchResultsPageContent() {
   const [totalTrips, setTotalTrips] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [scoreThresholds, setScoreThresholds] = useState<ScoreThresholds>({ HIGH: 70, MID: 50 });
+  const [showRefinementMessage, setShowRefinementMessage] = useState(false);
+  const [hasRelaxedResults, setHasRelaxedResults] = useState(false);
+  const [primaryCount, setPrimaryCount] = useState(0);
 
-  // Scroll to top on mount
+  // Scroll to top on mount and when search params change
   useEffect(() => {
-    window.scrollTo(0, 0);
-  }, []);
+    window.scrollTo({ top: 0, behavior: 'instant' });
+  }, [searchParams]);
 
   useEffect(() => {
     const fetchResults = async () => {
@@ -155,9 +182,9 @@ function SearchResultsPageContent() {
           max_duration: maxDuration,
           budget: budget,
           difficulty: difficulty,
-          start_date: year && year !== 'all' && month && month !== 'all'
-            ? `${year}-${month.padStart(2, '0')}-01`
-            : undefined,
+          // Send year and month as separate hard filters
+          year: year || 'all',
+          month: month || 'all',
         };
 
         // Log the API URL being used (for debugging)
@@ -184,7 +211,15 @@ function SearchResultsPageContent() {
         console.log('API response data:', { success: data.success, count: data.count, totalTrips: data.total_trips, resultsLength: data.data?.length });
         
         setResults(data.data || []);
-        setTotalTrips(data.total_trips || 0);  // Use total_trips (all trips in DB) not total_candidates (filtered count)
+        setTotalTrips(data.total_trips || 0);
+        setPrimaryCount(data.primary_count || data.count || 0);
+        setHasRelaxedResults(data.has_relaxed_results || false);
+        
+        // Get score thresholds and refinement message flag from API
+        if (data.score_thresholds) {
+          setScoreThresholds(data.score_thresholds);
+        }
+        setShowRefinementMessage(data.show_refinement_message || false);
       } catch (err) {
         console.error('Search failed:', err);
         console.error('Attempted to fetch from:', `${API_URL}/api/recommendations`);
@@ -257,7 +292,7 @@ function SearchResultsPageContent() {
             {/* Title - Centered and responsive */}
             <h1 className="text-xl md:text-2xl lg:text-3xl font-bold text-center text-white flex-1">
               {results.length > 0 
-                ? `נמצאו ${results.length} טיולים מומלצים עבורך` 
+                ? `נמצאו ${primaryCount} טיולים מומלצים עבורך` 
                 : 'לא נמצאו טיולים מתאימים'}
             </h1>
             
@@ -268,6 +303,22 @@ function SearchResultsPageContent() {
       </header>
 
       <div className="container mx-auto px-4 py-8 max-w-5xl">
+        {/* Refinement Message - Show when top result is mid-score (orange) */}
+        {showRefinementMessage && results.length > 0 && (
+          <div className="mb-6 p-6 bg-gradient-to-r from-orange-50 to-amber-50 border-2 border-orange-300 rounded-xl shadow-md text-center">
+            <p className="text-lg font-bold text-orange-800 mb-4">
+              רוצה שהאלגוריתם יקלע בול לטעם שלך?
+            </p>
+            <button
+              onClick={handleBackToSearch}
+              className="inline-flex items-center gap-2 px-6 py-3 bg-orange-500 text-white rounded-xl font-bold hover:bg-orange-600 transition-all shadow-lg"
+            >
+              <ArrowRight className="w-5 h-5" />
+              סינון קריטריונים נוספים
+            </button>
+          </div>
+        )}
+
         {results.length === 0 ? (
           <div className="text-center py-16">
             <div className="max-w-2xl mx-auto">
@@ -292,6 +343,26 @@ function SearchResultsPageContent() {
                 const trip = result.trip || result;
                 const dynamicImage = getDynamicImage(trip);
                 const tripId = trip?.id;
+                const isRelaxed = (result as any).is_relaxed || false;
+                const isFirstRelaxed = isRelaxed && (index === 0 || !(results[index - 1] as any).is_relaxed);
+                
+                return (
+                  <React.Fragment key={tripId || index}>
+                    {/* Separator before first relaxed result */}
+                    {isFirstRelaxed && (
+                      <div className="my-8 py-6">
+                        <div className="flex items-center gap-4 mb-4">
+                          <div className="flex-1 h-px bg-gradient-to-r from-transparent via-gray-300 to-transparent"></div>
+                          <span className="text-xl font-bold text-gray-700 px-4">תוצאות מורחבות</span>
+                          <div className="flex-1 h-px bg-gradient-to-r from-transparent via-gray-300 to-transparent"></div>
+                        </div>
+                        <p className="text-center text-gray-600 text-sm">
+                          כדי לא להשאיר אתכם בלי כלום, האלגוריתם שלנו איתר יעדים נוספים שקרובים מאוד להעדפות שהגדרתם.
+                        </p>
+                      </div>
+                    )}
+                    
+                    {(() => {
                 
                 // Get fields with both naming conventions support
                 const title = getTripField(trip, 'title_he', 'titleHe') || getTripField(trip, 'title', 'title') || 'טיול מומלץ';
@@ -300,6 +371,10 @@ function SearchResultsPageContent() {
                 const startDate = getTripField(trip, 'start_date', 'startDate');
                 const endDate = getTripField(trip, 'end_date', 'endDate');
                 const spotsLeft = getTripField(trip, 'spots_left', 'spotsLeft');
+                const tripType = getTripField(trip, 'trip_type', 'tripType') || getTripField(trip, 'type', 'type');
+                const tripTypeNameHe = tripType?.name_he || tripType?.nameHe || '';
+                const tripTypeId = getTripField(trip, 'trip_type_id', 'tripTypeId');
+                const isPrivateGroup = tripTypeId === 10;
                 
                 return (
                   <div
@@ -318,10 +393,20 @@ function SearchResultsPageContent() {
                     {/* Overlay */}
                     <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/40 to-black/20 group-hover:from-black/80 group-hover:via-black/60 group-hover:to-black/40 transition-all duration-1000 ease-in-out" />
                     
-                    {/* Top-Right: Match Score Badge */}
-                    <div className="absolute top-4 right-4 px-4 py-2 bg-[#12acbe] rounded-full shadow-lg">
-                      <span className="text-2xl font-bold text-white">{result?.match_score || 0}%</span>
-                    </div>
+                    {/* Top-Right: Match Score Badge with Color Coding */}
+                    {(() => {
+                      const score = result?.match_score || 0;
+                      const colorLevel = getScoreColor(score, scoreThresholds);
+                      const bgClass = getScoreBgClass(colorLevel);
+                      return (
+                        <div className={clsx(
+                          "absolute top-4 right-4 px-4 py-2 rounded-full shadow-lg",
+                          bgClass
+                        )}>
+                          <span className="text-2xl font-bold text-white">{score}</span>
+                        </div>
+                      );
+                    })()}
                     
                     {/* Top-Left: Status Badge (Text + Icon) */}
                     {trip?.status && (
@@ -356,6 +441,15 @@ function SearchResultsPageContent() {
                       </div>
                     )}
                     
+                    {/* Bottom-Left: Trip Type Badge (Same style as Status Badge) */}
+                    {tripTypeNameHe && (
+                      <div className="absolute bottom-4 left-4 px-4 py-2 bg-white/20 backdrop-blur-sm rounded-full shadow-lg">
+                        <span className="text-sm font-semibold text-white">
+                          {tripTypeNameHe}
+                        </span>
+                      </div>
+                    )}
+                    
                     {/* Content - Positioned Bottom-Right by default, Centers on Hover */}
                     <div className="absolute bottom-0 right-0 p-8 text-right transition-all duration-1000 ease-in-out group-hover:inset-0 group-hover:flex group-hover:flex-col group-hover:items-center group-hover:justify-center group-hover:text-center">
                       <h3 className="text-3xl font-bold text-white mb-3 drop-shadow-lg">
@@ -374,14 +468,14 @@ function SearchResultsPageContent() {
                       )}
                       
                       <div className="text-white drop-shadow-md text-lg font-semibold" dir="ltr">
-                        {startDate && endDate && (
+                        {!isPrivateGroup && startDate && endDate && (
                           <span className="whitespace-nowrap">
                             {new Date(startDate).toLocaleDateString('en-GB').replace(/\//g, '.')}
                             {' - '}
                             {new Date(endDate).toLocaleDateString('en-GB').replace(/\//g, '.')}
                           </span>
                         )}
-                        {trip?.price && startDate && (
+                        {trip?.price && startDate && !isPrivateGroup && (
                           <span className="mx-3 text-[#12acbe] text-2xl font-bold">|</span>
                         )}
                         {trip?.price && (
@@ -392,6 +486,9 @@ function SearchResultsPageContent() {
                       </div>
                     </div>
                   </div>
+                );
+              })()}
+                  </React.Fragment>
                 );
               })}
             </div>

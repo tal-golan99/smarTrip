@@ -1,10 +1,12 @@
 """
-Database Seed Script with Smart Logic
-Populates the database with realistic data from Ayala Geographic
+Database Seed Script with TripType Foreign Key Logic
+=====================================================
+Populates the database with realistic data using the new TripType model
+and strict Type-to-Country mapping for geographical accuracy.
 """
 
 from database import SessionLocal, init_db
-from models import Country, Guide, Tag, Trip, TripTag, Continent, Gender, TripStatus, TagCategory
+from models import Country, Guide, Tag, Trip, TripTag, TripType, Continent, Gender, TripStatus, TagCategory
 from faker import Faker
 from datetime import datetime, timedelta
 import random
@@ -13,10 +15,30 @@ import random
 fake_he = Faker('he_IL')
 fake_en = Faker('en_US')
 
+
+# ============================================
+# TYPE TO COUNTRY LOGIC MAP
+# ============================================
+TYPE_TO_COUNTRY_LOGIC = {
+    "Geographic Depth": "ALL",  # Can go anywhere
+    "African Safari": ["Kenya", "Tanzania", "South Africa", "Namibia", "Botswana", "Uganda", "Rwanda"],
+    "Snowmobile Tours": ["Iceland", "Lapland", "Norway", "Canada", "Greenland", "Russia", "Antarctica"],
+    "Jeep Tours": ["Jordan", "Morocco", "Namibia", "Kyrgyzstan", "Georgia", "Mongolia", "Oman", "Tunisia", "Bolivia", "Israel"],
+    "Train Tours": ["Switzerland", "Japan", "India", "Russia", "Scotland", "Norway", "Peru", "Canada", "Austria", "Italy"],
+    "Geographic Cruises": ["Antarctica", "Norway", "Vietnam", "Greece", "Croatia", "Iceland", "Chile", "Argentina"],
+    "Nature Hiking": "ALL",  # Can go anywhere with nature
+    "Carnivals & Festivals": ["Brazil", "Bolivia", "Peru", "Spain", "Italy", "India", "Japan", "Thailand", "Mexico", "Cuba"],
+    "Photography": "ALL",  # Can go anywhere
+    "Private Groups": "ALL",  # Can go anywhere
+}
+
+
 def seed_database():
-    """Seed the database with realistic data"""
+    """Seed the database with realistic data using TripType logic"""
     
-    print("Starting database seed...")
+    print("\n" + "="*70)
+    print("SMARTRIP DATABASE SEED - WITH TRIPTYPE FOREIGN KEY LOGIC")
+    print("="*70 + "\n")
     
     # Initialize database (create tables)
     init_db()
@@ -26,18 +48,9 @@ def seed_database():
     
     try:
         # ============================================
-        # CLEAR TRIPS DATA (Keep Countries/Tags/Guides)
+        # SEED COUNTRIES (Including Antarctica)
         # ============================================
-        print("Clearing existing trips and trip tags...")
-        session.query(TripTag).delete()
-        session.query(Trip).delete()
-        session.commit()
-        print("Cleared all trips and trip_tags")
-        
-        # ============================================
-        # SEED COUNTRIES (Updated Geography)
-        # ============================================
-        print("Seeding countries...")
+        print("[SEEDING] Countries...")
         
         countries_data = [
             # AFRICA
@@ -97,6 +110,7 @@ def seed_database():
             ('England', 'אנגליה', Continent.EUROPE),
             ('Estonia', 'אסטוניה', Continent.EUROPE),
             ('Armenia', 'ארמניה', Continent.EUROPE),
+            ('Scotland', 'סקוטלנד', Continent.EUROPE),
             ('Bulgaria', 'בולגריה', Continent.EUROPE),
             ('Bosnia and Herzegovina', 'בוסניה והרצגובינה', Continent.EUROPE),
             ('Belgium', 'בלגיה', Continent.EUROPE),
@@ -152,6 +166,9 @@ def seed_database():
             ('Peru', 'פרו', Continent.SOUTH_AMERICA),
             ('Chile', 'צ\'ילה', Continent.SOUTH_AMERICA),
             ('Colombia', 'קולומביה', Continent.SOUTH_AMERICA),
+            
+            # ANTARCTICA
+            ('Antarctica', 'אנטארקטיקה', Continent.ANTARCTICA),
         ]
         
         for name, name_he, continent in countries_data:
@@ -161,56 +178,71 @@ def seed_database():
                 session.add(country)
         
         session.commit()
-        print(f"Seeded {len(countries_data)} countries")
+        country_count = session.query(Country).count()
+        print(f"SUCCESS: Seeded {country_count} countries (including Antarctica)\n")
         
         # ============================================
-        # SEED TAGS (Strict TYPE vs THEME)
+        # SEED TRIP TYPES (New Model - Foreign Key)
         # ============================================
-        print("Seeding tags...")
+        print("[SEEDING] Trip Types (Foreign Key Model)...")
         
-        tags_data = [
-            # TYPE Category - The style of the trip
-            ('Geographic Depth', 'טיולי עומק גיאוגרפיים', 'In-depth geographical exploration tours', TagCategory.TYPE),
-            ('Carnivals & Festivals', 'טיולי קרנבלים ופסטיבלים', 'Cultural carnivals and festivals', TagCategory.TYPE),
-            ('African Safari', 'ספארי באפריקה', 'Wildlife safari adventures in Africa', TagCategory.TYPE),
-            ('Train Tours', 'טיולי רכבות', 'Scenic railway journeys', TagCategory.TYPE),
-            ('Geographic Cruises', 'טיולי שייט גיאוגרפיים', 'Maritime exploration cruises', TagCategory.TYPE),
-            ('Nature Hiking', 'טיולי הליכות בטבע', 'Nature walks and hiking', TagCategory.TYPE),
-            ('Boutique Tours', 'טיולי בוטיק בתפירה אישית', 'Custom-tailored boutique experiences', TagCategory.TYPE),
-            ('Jeep Tours', 'טיולי ג\'יפים', '4x4 off-road adventures', TagCategory.TYPE),
-            ('Snowmobile Tours', 'טיולי אופנועי שלג', 'Arctic snowmobile expeditions', TagCategory.TYPE),
-            ('Private Groups', 'קבוצות סגורות', 'Exclusive private group tours', TagCategory.TYPE),
-            ('Photography', 'צילום', 'Photography-focused tours', TagCategory.TYPE),
-            
-            # THEME Category - The content of the trip
-            ('Extreme', 'אקסטרים', 'Extreme adventure and challenge', TagCategory.THEME),
-            ('Wildlife', 'חיות בר', 'Wildlife observation tours', TagCategory.THEME),
-            ('Cultural', 'תרבות', 'Cultural immersion experiences', TagCategory.THEME),
-            ('Historical', 'היסטוריה', 'Historical sites and heritage', TagCategory.THEME),
-            ('Food & Wine', 'אוכל ויין', 'Culinary and wine tours', TagCategory.THEME),
-            ('Beach & Island', 'חופים ואיים', 'Beach and island getaways', TagCategory.THEME),
-            ('Mountain', 'הרים', 'Mountain expeditions', TagCategory.THEME),
-            ('Desert', 'מדבר', 'Desert exploration', TagCategory.THEME),
-            ('Arctic & Snow', 'קרח ושלג', 'Arctic and winter expeditions', TagCategory.THEME),
-            ('Tropical', 'טרופי', 'Tropical destinations', TagCategory.THEME),
-            ('Hanukkah & Christmas Lights', 'טיולי אורות חנוכה וכריסמס', 'Holiday lights and festive tours', TagCategory.THEME),
+        trip_types_data = [
+            ('Geographic Depth', 'טיולי עומק גיאוגרפיים', 'In-depth geographical exploration tours'),
+            ('Carnivals & Festivals', 'קרנבלים ופסטיבלים', 'Cultural carnivals and festivals'),
+            ('African Safari', 'ספארי באפריקה', 'Wildlife safari adventures in Africa'),
+            ('Train Tours', 'טיולי רכבות', 'Scenic railway journeys'),
+            ('Geographic Cruises', 'טיולי שייט גיאוגרפיים', 'Maritime exploration cruises'),
+            ('Nature Hiking', 'טיולי הליכות בטבע', 'Nature walks and hiking'),
+            ('Jeep Tours', 'טיולי ג\'יפים', '4x4 off-road adventures'),
+            ('Snowmobile Tours', 'טיולי אופנועי שלג', 'Arctic snowmobile expeditions'),
+            ('Private Groups', 'קבוצות סגורות', 'Exclusive private group tours'),
+            ('Photography', 'טיולי צילום', 'Photography-focused tours'),
         ]
         
-        for name, name_he, description, category in tags_data:
+        for name, name_he, description in trip_types_data:
+            existing = session.query(TripType).filter(TripType.name == name).first()
+            if not existing:
+                trip_type = TripType(name=name, name_he=name_he, description=description)
+                session.add(trip_type)
+        
+        session.commit()
+        type_count = session.query(TripType).count()
+        print(f"SUCCESS: Seeded {type_count} Trip Types (Foreign Key)\n")
+        
+        # ============================================
+        # SEED THEME TAGS (THEME Category Only)
+        # ============================================
+        print("[SEEDING] Theme Tags (THEME Category Only)...")
+        
+        theme_tags_data = [
+            ('Cultural & Historical', 'תרבות והיסטוריה', 'Cultural immersion and historical heritage sites'),
+            ('Wildlife', 'חיות בר', 'Wildlife observation tours'),
+            ('Extreme', 'אקסטרים', 'Extreme adventure and challenge'),
+            ('Food & Wine', 'אוכל ויין', 'Culinary and wine tours'),
+            ('Beach & Island', 'חופים ואיים', 'Beach and island getaways'),
+            ('Mountain', 'הרים', 'Mountain expeditions'),
+            ('Desert', 'מדבר', 'Desert exploration'),
+            ('Arctic & Snow', 'קרח ושלג', 'Arctic and winter expeditions'),
+            ('Tropical', 'טרופי', 'Tropical destinations'),
+            ('Hanukkah & Christmas Lights', 'אורות חנוכה וכריסמס', 'Holiday lights and festive tours'),
+        ]
+        
+        for name, name_he, description in theme_tags_data:
             existing = session.query(Tag).filter(Tag.name == name).first()
             if not existing:
-                tag = Tag(name=name, name_he=name_he, description=description, category=category)
+                tag = Tag(name=name, name_he=name_he, description=description, category=TagCategory.THEME)
                 session.add(tag)
         
         session.commit()
-        print(f"Seeded {len(tags_data)} tags (TYPE + THEME categories)")
+        theme_count = session.query(Tag).count()
+        print(f"SUCCESS: Seeded {theme_count} Theme Tags\n")
         
         # ============================================
         # SEED GUIDES (5 Specific + 20 Generated)
         # ============================================
-        print("Seeding guides...")
+        print("[SEEDING] Guides...")
         
-        # 5 Specific hardcoded guides (Hebrew names)
+        # 5 Specific hardcoded guides
         specific_guides = [
             ('איילה כהן', 'ayala@ayalageo.co.il', '+972-3-9436030', Gender.FEMALE, 45,
              'Founder of Ayala Geographic, specializing in geographic depth tours worldwide',
@@ -233,8 +265,8 @@ def seed_database():
             existing = session.query(Guide).filter(Guide.email == email).first()
             if not existing:
                 guide = Guide(
-                    name=name_he,  # Use Hebrew name
-                    name_he=name_he,  # Populate name_he field
+                    name=name_he,
+                    name_he=name_he,
                     email=email,
                     phone=phone,
                     gender=gender,
@@ -245,7 +277,7 @@ def seed_database():
                 )
                 session.add(guide)
         
-        # Generate 20 additional realistic guides with Faker
+        # Generate 20 additional guides
         specializations_en = [
             'Expert in mountain trekking and high-altitude expeditions',
             'Specialist in cultural heritage and archaeological sites',
@@ -293,71 +325,57 @@ def seed_database():
         ]
         
         for i in range(20):
-            # Generate realistic Hebrew names ONLY
             first_name_he = fake_he.first_name()
             last_name_he = fake_he.last_name()
             name_he = f"{first_name_he} {last_name_he}"
-            
-            # Use Hebrew name for email (transliterated)
             email_name = f"guide{i+6}@ayalageo.co.il"
             phone = f"+972-{random.choice(['50', '52', '53', '54'])}-{random.randint(1000000, 9999999)}"
             gender = random.choice([Gender.MALE, Gender.FEMALE])
             age = random.randint(28, 60)
-            
             spec_index = i % len(specializations_en)
-            bio = specializations_en[spec_index]
-            bio_he = specializations_he[spec_index]
             
             existing = session.query(Guide).filter(Guide.email == email_name).first()
             if not existing:
                 guide = Guide(
-                    name=name_he,  # Use Hebrew name
-                    name_he=name_he,  # Populate name_he field
+                    name=name_he,
+                    name_he=name_he,
                     email=email_name,
                     phone=phone,
                     gender=gender,
                     age=age,
-                    bio=bio,
-                    bio_he=bio_he,
+                    bio=specializations_en[spec_index],
+                    bio_he=specializations_he[spec_index],
                     is_active=True
                 )
                 session.add(guide)
         
         session.commit()
         guide_count = session.query(Guide).count()
-        print(f"Seeded {guide_count} guides (5 specific + 20 generated)")
+        print(f"SUCCESS: Seeded {guide_count} guides\n")
         
         # ============================================
-        # SEED TRIPS (200+ with High-Quality Hebrew Content)
+        # SMART TRIP GENERATION WITH TRIPTYPE LOGIC
         # ============================================
-        print("Generating 200+ trips with premium Hebrew content...")
+        print("[GENERATING] Trips with TripType-Country logic...\n")
         
-        # Get all data for trip generation
+        # Get all data
         all_countries = session.query(Country).all()
         all_guides = session.query(Guide).filter(Guide.is_active == True).all()
-        type_tags = session.query(Tag).filter(Tag.category == TagCategory.TYPE).all()
+        all_trip_types = session.query(TripType).all()
         theme_tags = session.query(Tag).filter(Tag.category == TagCategory.THEME).all()
+        
+        # Build country name lookup
+        country_by_name = {c.name: c for c in all_countries}
         
         # Smart tag mapping by continent
         CONTINENT_THEME_MAPPING = {
-            Continent.AFRICA: ['Wildlife', 'Cultural', 'Desert', 'Photography', 'Extreme'],
-            Continent.ASIA: ['Cultural', 'Historical', 'Food & Wine', 'Mountain', 'Tropical', 'Beach & Island'],
-            Continent.EUROPE: ['Historical', 'Cultural', 'Food & Wine', 'Mountain', 'Arctic & Snow', 'Hanukkah & Christmas Lights'],
-            Continent.NORTH_AND_CENTRAL_AMERICA: ['Mountain', 'Desert', 'Beach & Island', 'Wildlife', 'Cultural', 'Hanukkah & Christmas Lights'],
-            Continent.SOUTH_AMERICA: ['Mountain', 'Tropical', 'Wildlife', 'Cultural', 'Extreme'],
+            Continent.AFRICA: ['Wildlife', 'Cultural & Historical', 'Desert', 'Photography', 'Extreme'],
+            Continent.ASIA: ['Cultural & Historical', 'Food & Wine', 'Mountain', 'Tropical', 'Beach & Island'],
+            Continent.EUROPE: ['Cultural & Historical', 'Food & Wine', 'Mountain', 'Arctic & Snow', 'Hanukkah & Christmas Lights'],
+            Continent.NORTH_AND_CENTRAL_AMERICA: ['Mountain', 'Desert', 'Beach & Island', 'Wildlife', 'Cultural & Historical'],
+            Continent.SOUTH_AMERICA: ['Mountain', 'Tropical', 'Wildlife', 'Cultural & Historical', 'Extreme'],
             Continent.OCEANIA: ['Beach & Island', 'Tropical', 'Wildlife', 'Mountain', 'Extreme'],
             Continent.ANTARCTICA: ['Arctic & Snow', 'Wildlife', 'Extreme', 'Photography'],
-        }
-        
-        # Price ranges by continent (in USD)
-        CONTINENT_PRICE_RANGES = {
-            Continent.AFRICA: (3000, 8000),
-            Continent.ASIA: (2500, 6000),
-            Continent.EUROPE: (2000, 5000),
-            Continent.NORTH_AND_CENTRAL_AMERICA: (3000, 7000),
-            Continent.SOUTH_AMERICA: (3500, 8000),
-            Continent.OCEANIA: (5000, 12000),
-            Continent.ANTARCTICA: (10000, 20000),
         }
         
         # Premium Hebrew Title Templates
@@ -374,251 +392,278 @@ def seed_database():
             'פלאי {}',
             'אוצרות {}',
             '{} – מסע חלומות',
-            'עקבות {} הקסומה',
-            'נופי {} הדרמטיים',
-            '{} בעונה המושלמת',
         ]
         
         # Premium Hebrew Description Templates by Continent
         HEBREW_DESCRIPTIONS = {
             Continent.ASIA: [
-                'מסע צבעוני בלב המזרח הקסום, בין טרסות אורז, כפרים מסורתיים ונופים עוצרי נשימה. חוויה אותנטית המשלבת תרבות עתיקה עם טבע פראי.',
-                'מסע מעמיק אל הלב, הרוח, הטעמים והצבעים של תת-היבשת המרתקת. חוויה של פעם בחיים שמשלבת מקדשים, שווקים ססגוניים ונופים מרהיבים.',
-                'גלו את קסמה של תרבות עתיקה ששרדה אלפי שנים. בין מקדשים מפוארים, כפרים מסורתיים וטבע בראשיתי.',
-                'הרפתקה אסייתית אמיתית: טבע פראי, מסורות עתיקות, טעמים אקזוטיים ואנשים חמים. מסע שישנה את השקפת עולמכם.',
-                'חוויה רוחנית ותרבותית עמוקה בין הרים מושלגים, עמקים ירוקים ועיירות קסומות. מסע אל נוף הנשמה.',
+                'מסע צבעוני בלב המזרח הקסום, בין טרסות אורז, כפרים מסורתיים ונופים עוצרי נשימה.',
+                'מסע מעמיק אל הלב, הרוח, הטעמים והצבעים של תת-היבשת המרתקת.',
+                'גלו את קסמה של תרבות עתיקה ששרדה אלפי שנים. בין מקדשים מפוארים וטבע בראשיתי.',
             ],
             Continent.AFRICA: [
-                'מסע אל הלב הפועם של היבשת הפראית. ספארי מרהיב, שקיעות אדומות, עולם חי עשיר וטבע בראשיתי שלא נגע בו אדם.',
-                'חוויה אפריקאית אמיתית: בין סוואנות אינסופיות, חיות בר מרהיבות ותרבויות שבטיות עתיקות. טבע פראי שאין כמוהו.',
-                'גלו את קסם המדבר האפריקאי, דיונות זהב אינסופיות, שבטים נומדיים ושקיעות עוצרות נשימה. מסע אל עבר רחוק.',
-                'ספארי פוטוגרפי מרהיב ביבשת הקסומה. בין חמשת הגדולים, נופים דרמטיים ושמורות טבע בראשיתיות.',
-                'מסע אל מעמקי אפריקה המסתורית: תרבות עשירה, טבע פראי, מסורות עתיקות וחוויות שאי אפשר לשכוח.',
+                'מסע אל הלב הפועם של היבשת הפראית. ספארי מרהיב, שקיעות אדומות ועולם חי עשיר.',
+                'חוויה אפריקאית אמיתית: בין סוואנות אינסופיות, חיות בר מרהיבות ותרבויות שבטיות עתיקות.',
+                'גלו את קסם המדבר האפריקאי, דיונות זהב אינסופיות ושקיעות עוצרות נשימה.',
             ],
             Continent.EUROPE: [
-                'מסע תרבותי מרתק בין ארמונות מפוארים, כנסיות גותיות, מוזיאונים עשירים וקפאים אינטימיים. אירופה במיטבה.',
-                'גלו את קסמה של היבשת העתיקה: אדריכלות מרהיבה, אמנות מופתית, קולינריה מעודנת וטבע מגוון.',
-                'צפון איטליה בחג המולד – שלג, אורות וריחות מאגדה חורפית. חוויה קסומה בלב אירופה הרומנטית.',
-                'מסע היסטורי מעמיק בין ערים עתיקות, אתרי מורשת עולמית וסיפורים שעיצבו את העולם המודרני.',
-                'חוויה אירופאית משולבת: בין נופי הרים מרהיבים, כרמים ירוקים, עיירות קסומות ותרבות עשירה בת אלפי שנים.',
+                'מסע תרבותי מרתק בין ארמונות מפוארים, כנסיות גותיות ומוזיאונים עשירים.',
+                'גלו את קסמה של היבשת העתיקה: אדריכלות מרהיבה, אמנות מופתית וקולינריה מעודנת.',
+                'מסע היסטורי מעמיק בין ערים עתיקות ואתרי מורשת עולמית.',
             ],
             Continent.SOUTH_AMERICA: [
-                'הרפתקה של פעם בחיים ביבשת הססגונית בעולם – טבע פראי, תרבויות מרתקות, ערים תוססות ומסע רב-רבדים אל נופים, טעמים וסיפורים שאין דומים להם.',
-                'מסע אל לב יער הגשם האמזוני, בין עצים עתיקים, חיות בר נדירות ושבטים ילידים. חוויה בראשיתית שלא תשכחו לעולם.',
-                'טרק מרגש בין פסגות האנדים המושלגות, אגמים בצבעי כחול-טורקיז ושרידי תרבות האינקה העתיקה.',
-                'קרנבל, סמבה ושמחת חיים: גלו את הצד הססגוני והמרגש של דרום אמריקה בין חופים זהובים, מפלים מרהיבים ותרבות תוססת.',
-                'חוויה אקסטרימית בקצה העולם: קרחונים כחולים, פסגות מושלגות, נופים דרמטיים וטבע בראשיתי שעוצר נשימה.',
+                'הרפתקה של פעם בחיים ביבשת הססגונית – טבע פראי, תרבויות מרתקות וערים תוססות.',
+                'מסע אל לב יער הגשם האמזוני, בין עצים עתיקים וחיות בר נדירות.',
+                'טרק מרגש בין פסגות האנדים המושלגות ושרידי תרבות האינקה העתיקה.',
             ],
             Continent.NORTH_AND_CENTRAL_AMERICA: [
-                'גלו את יופי המערב הפראי: קניונים אדומים, נופים אינסופיים, פארקים לאומיים מרהיבים וטבע מגוון ועשיר.',
-                'מסע אל הטבע הצפון-אמריקאי: בין יערות ירוקים עתיקים, אגמים צלולים, הרים מושלגים וחיות בר מרהיבות.',
-                'חוויה קנדית אמיתית: טבע בראשיתי, אגמים פיורדים, דובי גריזלי וצפון רחוק שמציע נופים שאי אפשר למצוא בשום מקום אחר.',
-                'טרופי קריבי: חופים לבנים, מים טורקיז, שונית אלמוגים צבעונית וג\'ונגלים ירוקים. גן עדן עלי אדמות.',
-                'הרי הרוקי במלוא הדרם: פסגות מושלגות, עמקים ירוקים, אגמים צלולים וחיות בר בסביבה הטבעית שלהם.',
+                'גלו את יופי המערב הפראי: קניונים אדומים, נופים אינסופיים ופארקים לאומיים מרהיבים.',
+                'מסע אל הטבע הצפון-אמריקאי: בין יערות ירוקים, אגמים צלולים והרים מושלגים.',
+                'טרופי קריבי: חופים לבנים, מים טורקיז ושונית אלמוגים צבעונית.',
             ],
             Continent.OCEANIA: [
-                'מסע חד פעמי בין איים וחלומות – שייט מרהיב לגן העדן הטרופי, בין הרי געש ליערות גשם, בין חופים זהובים לתרבות פולינזית חמה.',
-                'מסע אל קצה העולם – טבע בראשיתי, נופים דרמטיים, עולם חי נדיר ותרבות מאורית עתיקה. הרפתקה אוסטרלית אמיתית.',
-                'גלו את ניו זילנד הקסומה: פיורדים כחולים, הרים מושלגים, גייזרים מפעפעים ונופים שנראים כאילו יצאו מסרט פנטזיה.',
-                'שונית המחסום הגדולה: צלילה בין אלמוגים צבעוניים, צבי ים, דולפינים ודגים טרופיים. חוויה תת-ימית בלתי נשכחת.',
-                'הרפתקה באוסטרליה הפראית: אאוטבק אדום, חופים לבנים, יערות גשם טרופיים וחיות בר ייחודיות שלא קיימות בשום מקום אחר.',
+                'מסע חד פעמי בין איים וחלומות – שייט מרהיב לגן העדן הטרופי.',
+                'מסע אל קצה העולם – טבע בראשיתי, נופים דרמטיים ועולם חי נדיר.',
+                'גלו את ניו זילנד הקסומה: פיורדים כחולים, הרים מושלגים וגייזרים מפעפעים.',
             ],
             Continent.ANTARCTICA: [
-                'מסע אל הקוטב הנצחי – קרחונים כחולים מרהיבים, פינגווינים באלפים, כלבי ים וטבע קפוא בראשיתי. הרפתקה בקצה העולם.',
-                'חוויה קוטבית אמיתית ביבשת הלבנה: שדות קרח אינסופיים, הרי קרח מרהיבים ושקט מוחלט. מסע שיגדיר את המושג הרפתקה.',
-                'שייט קוטבי מרגש בין קרחונים צפים, מפרצונים קפואים ומושבות פינגווינים ענקיות. חוויה של פעם בחיים.',
-                'אנטארקטיקה – היבשת האחרונה: טבע בראשיתי קפוא, חיות בר ייחודיות ונופים מהעולם הבא. מסע אקסטרימי שרק אמיצים מעזים.',
-                'מסע פוטוגרפי לקצה הדרומי: קרחונים בצבעי כחול-לבן, עולם חי קוטבי וזריחות שקיעות מאגיות באור הקוטב.',
+                'מסע אל הקוטב הנצחי – קרחונים כחולים מרהיבים, פינגווינים באלפים וטבע קפוא בראשיתי.',
+                'חוויה קוטבית אמיתית ביבשת הלבנה: שדות קרח אינסופיים והרי קרח מרהיבים.',
+                'שייט קוטבי מרגש בין קרחונים צפים ומושבות פינגווינים ענקיות.',
             ],
         }
         
-        # Premium Hebrew Title Prefix Templates
-        TITLE_PREFIXES = [
-            'הקסם של',
-            'מסע אל',
-            'גלה את',
-            'חוויה ב',
-            'הרפתקה ב',
-            'פלאי',
-            'אוצרות',
-            'סיור מעמיק ב',
-            'טיול מקיף ב',
-            'מסע תרבותי ב',
-        ]
+        # Track trips per country
+        trips_per_country = {country.id: 0 for country in all_countries}
+        all_generated_trips = []
         
-        # Price ranges by continent (in USD)
-        CONTINENT_PRICE_RANGES = {
-            Continent.AFRICA: (3000, 8000),
-            Continent.ASIA: (2500, 6000),
-            Continent.EUROPE: (2000, 5000),
-            Continent.NORTH_AND_CENTRAL_AMERICA: (3000, 7000),
-            Continent.SOUTH_AMERICA: (3500, 8000),
-            Continent.OCEANIA: (5000, 12000),
-            Continent.ANTARCTICA: (10000, 20000),
-        }
+        # PHASE 1: Generate trips by TripType (at least 10 per type)
+        print("PHASE 1: Generating trips by TripType (min 10 per type)...\n")
         
-        trips_to_generate = []
-        
-        # STEP 1: Ensure EVERY country gets at least ONE trip
-        print(f"Creating base trips for {len(all_countries)} countries...")
-        for country in all_countries:
-            trips_to_generate.append(country)
-        
-        # STEP 2: Fill remaining slots randomly to reach 300
-        target_count = 300
-        remaining = target_count - len(trips_to_generate)
-        print(f"Adding {remaining} additional random trips...")
-        for _ in range(remaining):
-            trips_to_generate.append(random.choice(all_countries))
-        
-        # STEP 3: Generate trips with premium content
-        print(f"Generating {len(trips_to_generate)} trips with premium Hebrew content...")
-        
-        for idx, country in enumerate(trips_to_generate, 1):
-            continent = country.continent
+        for trip_type in all_trip_types:
+            type_name = trip_type.name
+            country_restriction = TYPE_TO_COUNTRY_LOGIC.get(type_name, "ALL")
             
-            # Generate realistic dates (1-18 months from now, 5-30 days duration)
-            days_from_now = random.randint(30, 540)
-            start_date = datetime.now().date() + timedelta(days=days_from_now)
-            duration = random.randint(5, 30)  # Updated to 5-30 days
-            end_date = start_date + timedelta(days=duration)
-            
-            # Generate price ($2,000-$15,000, must end in 0)
-            base_price = random.randint(200, 1500) * 10  # Always ends in 0
-            single_supplement = base_price * random.uniform(0.15, 0.25)
-            
-            # Generate capacity
-            max_capacity = random.choice([12, 15, 18, 20, 24, 25, 30])
-            spots_left = random.randint(0, max_capacity)
-            
-            # Determine status based on spots left (LAST_PLACES if <= 4 spots)
-            if spots_left == 0:
-                status = TripStatus.FULL
-            elif spots_left <= 4:
-                status = TripStatus.LAST_PLACES  # Force LAST_PLACES for scarcity
-            elif spots_left >= max_capacity * 0.8:
-                status = TripStatus.OPEN
+            # Get valid countries for this type
+            if country_restriction == "ALL":
+                valid_countries = all_countries
             else:
-                # 25% chance for LAST_PLACES, 50% GUARANTEED, 25% OPEN
-                rand = random.random()
-                if rand < 0.25:
-                    status = TripStatus.LAST_PLACES
-                elif rand < 0.75:
-                    status = TripStatus.GUARANTEED
-                else:
-                    status = TripStatus.OPEN
+                valid_countries = [country_by_name[name] for name in country_restriction if name in country_by_name]
             
-            # Difficulty level
-            difficulty = random.randint(1, 3)
+            if not valid_countries:
+                print(f"WARNING: No valid countries for {type_name}, skipping...")
+                continue
             
-            # Select guide
-            guide = random.choice(all_guides)
+            # Generate 30-40 trips for this type (to reach ~400 total)
+            num_trips = random.randint(30, 40)
+            print(f"  [{type_name}] Generating {num_trips} trips...")
             
-            # Generate premium Hebrew title
-            template = random.choice(HEBREW_TITLE_TEMPLATES)
-            title_he = template.format(country.name_he)
-            title = f"Discover {country.name}"
+            for _ in range(num_trips):
+                country = random.choice(valid_countries)
+                trips_per_country[country.id] += 1
+                
+                # Generate trip data
+                trip_data = generate_trip_data(
+                    country=country,
+                    trip_type=trip_type,
+                    guide=random.choice(all_guides),
+                    theme_tags=theme_tags,
+                    continent_theme_mapping=CONTINENT_THEME_MAPPING,
+                    hebrew_title_templates=HEBREW_TITLE_TEMPLATES,
+                    hebrew_descriptions=HEBREW_DESCRIPTIONS
+                )
+                
+                all_generated_trips.append(trip_data)
+        
+        print(f"\nSUCCESS: Phase 1 Complete - {len(all_generated_trips)} trips generated\n")
+        
+        # PHASE 2: Ensure every country has at least 1 trip
+        print("PHASE 2: Ensuring every country has at least 1 trip...\n")
+        
+        countries_needing_trips = [c for c in all_countries if trips_per_country[c.id] == 0]
+        
+        for country in countries_needing_trips:
+            # Find compatible trip types for this country
+            compatible_types = []
+            for trip_type in all_trip_types:
+                restriction = TYPE_TO_COUNTRY_LOGIC.get(trip_type.name, "ALL")
+                if restriction == "ALL" or country.name in restriction:
+                    compatible_types.append(trip_type)
             
-            # Generate context-aware descriptions (both English and Hebrew)
-            continent_descriptions_he = HEBREW_DESCRIPTIONS.get(continent, HEBREW_DESCRIPTIONS[Continent.ASIA])
-            description_he = random.choice(continent_descriptions_he)
+            if not compatible_types:
+                # Default to "Geographic Depth" (works everywhere)
+                compatible_types = [t for t in all_trip_types if t.name == "Geographic Depth"]
             
-            # English descriptions mapped by continent
-            english_desc_templates = {
-                Continent.AFRICA: [
-                    f"Explore the wild heart of {country.name}. Experience breathtaking safaris, vibrant cultures, and pristine natural landscapes.",
-                    f"An unforgettable African adventure in {country.name}. Witness incredible wildlife, ancient traditions, and dramatic scenery.",
-                    f"Discover the magic of {country.name} with expert guides. Safari, culture, and natural wonders await.",
-                ],
-                Continent.ASIA: [
-                    f"Journey through the enchanting landscapes of {country.name}. Experience ancient temples, vibrant markets, and stunning scenery.",
-                    f"Immerse yourself in the culture and beauty of {country.name}. A transformative Asian adventure.",
-                    f"Explore {country.name}'s hidden treasures. From spiritual sites to natural wonders, every moment is unforgettable.",
-                ],
-                Continent.EUROPE: [
-                    f"Discover the historic charm of {country.name}. Explore magnificent architecture, world-class cuisine, and rich cultural heritage.",
-                    f"Experience the best of {country.name}. From medieval towns to modern cities, history comes alive.",
-                    f"Journey through {country.name}'s stunning landscapes. Mountains, coastlines, and timeless villages await.",
-                ],
-                Continent.SOUTH_AMERICA: [
-                    f"Adventure awaits in {country.name}. Trek through mountain ranges, explore rainforests, and experience vibrant cultures.",
-                    f"Discover the wild beauty of {country.name}. From ancient ruins to natural wonders, every day is extraordinary.",
-                    f"Explore {country.name}'s diverse landscapes. Glaciers, jungles, and coastlines offer endless adventure.",
-                ],
-                Continent.NORTH_AND_CENTRAL_AMERICA: [
-                    f"Experience the natural splendor of {country.name}. National parks, stunning coastlines, and rich biodiversity await.",
-                    f"Discover {country.name}'s incredible landscapes. From mountains to beaches, adventure is everywhere.",
-                    f"Explore the diverse beauty of {country.name}. Wildlife, culture, and breathtaking scenery combine for an unforgettable journey.",
-                ],
-                Continent.OCEANIA: [
-                    f"Journey to the paradise of {country.name}. Pristine beaches, coral reefs, and unique wildlife await.",
-                    f"Discover the natural wonders of {country.name}. From tropical islands to dramatic landscapes.",
-                    f"Experience {country.name}'s breathtaking beauty. Dive into crystal waters and explore untouched nature.",
-                ],
-                Continent.ANTARCTICA: [
-                    f"Venture to the frozen continent. Witness massive glaciers, penguin colonies, and pristine polar wilderness.",
-                    f"Experience Antarctica's otherworldly beauty. Ice formations, wildlife, and endless white landscapes.",
-                    f"Journey to the ends of the Earth. Antarctica offers the ultimate polar expedition.",
-                ],
-            }
+            trip_type = random.choice(compatible_types)
+            trips_per_country[country.id] += 1
             
-            english_templates = english_desc_templates.get(continent, english_desc_templates[Continent.ASIA])
-            description = random.choice(english_templates)
+            trip_data = generate_trip_data(
+                country=country,
+                trip_type=trip_type,
+                guide=random.choice(all_guides),
+                theme_tags=theme_tags,
+                continent_theme_mapping=CONTINENT_THEME_MAPPING,
+                hebrew_title_templates=HEBREW_TITLE_TEMPLATES,
+                hebrew_descriptions=HEBREW_DESCRIPTIONS
+            )
             
-            # Create trip
+            all_generated_trips.append(trip_data)
+            print(f"  [ADDED] Trip for {country.name} ({trip_type.name})")
+        
+        print(f"\nSUCCESS: Phase 2 Complete - {len(countries_needing_trips)} countries filled\n")
+        
+        # PHASE 3: Save all trips to database
+        print("PHASE 3: Saving trips to database...\n")
+        
+        for idx, trip_data in enumerate(all_generated_trips, 1):
             trip = Trip(
-                title=title,
-                title_he=title_he,
-                description=description,
-                description_he=description_he,
-                start_date=start_date,
-                end_date=end_date,
-                price=base_price,
-                single_supplement_price=single_supplement,
-                max_capacity=max_capacity,
-                spots_left=spots_left,
-                status=status,
-                difficulty_level=difficulty,
-                country_id=country.id,
-                guide_id=guide.id
+                title=trip_data['title'],
+                title_he=trip_data['title_he'],
+                description=trip_data['description'],
+                description_he=trip_data['description_he'],
+                start_date=trip_data['start_date'],
+                end_date=trip_data['end_date'],
+                price=trip_data['price'],
+                single_supplement_price=trip_data['single_supplement'],
+                max_capacity=trip_data['max_capacity'],
+                spots_left=trip_data['spots_left'],
+                status=trip_data['status'],
+                difficulty_level=trip_data['difficulty'],
+                country_id=trip_data['country_id'],
+                guide_id=trip_data['guide_id'],
+                trip_type_id=trip_data['trip_type_id']  # Foreign Key to TripType
             )
             session.add(trip)
-            session.flush()  # Get trip ID
+            session.flush()
             
-            # Assign tags with smart logic
-            # 1. Mandatory: ONE TYPE tag
-            type_tag = random.choice(type_tags)
-            trip_tag_type = TripTag(trip_id=trip.id, tag_id=type_tag.id)
-            session.add(trip_tag_type)
+            # Add theme tags (many-to-many)
+            for theme_tag_id in trip_data['theme_tag_ids']:
+                trip_tag = TripTag(trip_id=trip.id, tag_id=theme_tag_id)
+                session.add(trip_tag)
             
-            # 2. Optional: 1-3 THEME tags (continent-appropriate)
-            continent_themes = CONTINENT_THEME_MAPPING.get(continent, [])
-            available_theme_tags = [t for t in theme_tags if t.name in continent_themes]
-            
-            if available_theme_tags:
-                num_themes = random.randint(1, min(3, len(available_theme_tags)))
-                selected_themes = random.sample(available_theme_tags, num_themes)
-                
-                for theme_tag in selected_themes:
-                    trip_tag_theme = TripTag(trip_id=trip.id, tag_id=theme_tag.id)
-                    session.add(trip_tag_theme)
-            
-            if (idx % 50 == 0):
-                print(f"  ... {idx} trips created")
+            if idx % 50 == 0:
+                print(f"  ... {idx} trips saved")
         
         session.commit()
         trip_count = session.query(Trip).count()
-        print(f"Generated {trip_count} trips with premium Hebrew content")
+        print(f"\nSUCCESS: Saved {trip_count} trips to database\n")
         
-        print("Database seeded successfully!")
+        # ============================================
+        # FINAL SUMMARY
+        # ============================================
+        print("="*70)
+        print("DATABASE SEED COMPLETED SUCCESSFULLY")
+        print("="*70)
+        print(f"\nFinal Statistics:")
+        print(f"   - Countries: {country_count}")
+        print(f"   - Trip Types: {type_count}")
+        print(f"   - Theme Tags: {theme_count}")
+        print(f"   - Guides: {guide_count}")
+        print(f"   - Trips: {trip_count}")
+        
+        # Show trips per type
+        print(f"\nTrips per Type:")
+        for trip_type in all_trip_types:
+            count = session.query(Trip).filter(Trip.trip_type_id == trip_type.id).count()
+            print(f"   - {trip_type.name}: {count} trips")
+        
+        print(f"\nSUCCESS: All countries have at least 1 trip!")
+        print(f"SUCCESS: Database ready for production!\n")
         
     except Exception as e:
-        print(f"Error seeding database: {e}")
+        print(f"\nERROR seeding database: {e}")
         session.rollback()
         raise
     
     finally:
         session.close()
+
+
+def generate_trip_data(country, trip_type, guide, theme_tags, continent_theme_mapping, 
+                       hebrew_title_templates, hebrew_descriptions):
+    """Generate trip data with premium content"""
+    
+    continent = country.continent
+    is_private_group = trip_type.name == 'Private Groups'
+    
+    # Generate dates (special handling for Private Groups)
+    if is_private_group:
+        # Private Groups: no fixed date (set to far future)
+        start_date = datetime(2099, 12, 31).date()
+        end_date = datetime(2099, 12, 31).date()
+    else:
+        # Regular trips: 1-18 months from now, 5-30 days duration
+        days_from_now = random.randint(30, 540)
+        start_date = datetime.now().date() + timedelta(days=days_from_now)
+        duration = random.randint(5, 30)
+        end_date = start_date + timedelta(days=duration)
+    
+    # Generate price ($2,000-$15,000, ends in 0)
+    base_price = random.randint(200, 1500) * 10
+    single_supplement = base_price * random.uniform(0.15, 0.25)
+    
+    # Generate capacity (special handling for Private Groups)
+    if is_private_group:
+        # Private Groups: 0 participants (entire group booking)
+        max_capacity = 0
+        spots_left = 0
+        status = TripStatus.OPEN  # Always open for group bookings
+    else:
+        # Regular trips: normal capacity
+        max_capacity = random.choice([12, 15, 18, 20, 24, 25, 30])
+        spots_left = random.randint(0, max_capacity)
+        
+        # Determine status
+        if spots_left == 0:
+            status = TripStatus.FULL
+        elif spots_left <= 4:
+            status = TripStatus.LAST_PLACES
+        elif spots_left >= max_capacity * 0.8:
+            status = TripStatus.OPEN
+        else:
+            status = random.choice([TripStatus.GUARANTEED, TripStatus.LAST_PLACES, TripStatus.OPEN])
+    
+    # Difficulty
+    difficulty = random.randint(1, 3)
+    
+    # Generate titles
+    template = random.choice(hebrew_title_templates)
+    title_he = template.format(country.name_he)
+    title = f"Discover {country.name}"
+    
+    # Generate descriptions
+    continent_descriptions_he = hebrew_descriptions.get(continent, hebrew_descriptions[Continent.ASIA])
+    description_he = random.choice(continent_descriptions_he)
+    description = f"Explore the wonders of {country.name}. An unforgettable journey awaits."
+    
+    # Select theme tags (continent-appropriate)
+    continent_themes = continent_theme_mapping.get(continent, [])
+    available_theme_tags = [t for t in theme_tags if t.name in continent_themes]
+    
+    theme_tag_ids = []
+    if available_theme_tags:
+        num_themes = random.randint(1, min(3, len(available_theme_tags)))
+        selected_themes = random.sample(available_theme_tags, num_themes)
+        theme_tag_ids = [t.id for t in selected_themes]
+    
+    return {
+        'title': title,
+        'title_he': title_he,
+        'description': description,
+        'description_he': description_he,
+        'start_date': start_date,
+        'end_date': end_date,
+        'price': base_price,
+        'single_supplement': single_supplement,
+        'max_capacity': max_capacity,
+        'spots_left': spots_left,
+        'status': status,
+        'difficulty': difficulty,
+        'country_id': country.id,
+        'guide_id': guide.id,
+        'trip_type_id': trip_type.id,  # Foreign Key
+        'theme_tag_ids': theme_tag_ids
+    }
 
 
 if __name__ == '__main__':

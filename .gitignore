@@ -75,9 +75,12 @@ backend/__pycache__/
 *_COMPLETE.md
 *_UPDATES.md
 *_FIXES.md
-*_GUIDE.md
 *_STATUS.md
 *_REFERENCE.md
 *.bat
 migrate_*.py
 *-test/
+
+# Keep important guides
+!backend/RESEEDING_GUIDE.md
+!backend/SCHEMA_REFACTORING_COMPLETE.md
