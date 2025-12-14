@@ -322,6 +322,9 @@ def get_countries():
     try:
         query = db_session.query(Country)
         
+        # Exclude Antarctica from country list (users select it via continent instead)
+        query = query.filter(Country.name != 'Antarctica')
+        
         if continent:
             query = query.filter(Country.continent == continent)
         
@@ -995,7 +998,13 @@ def get_recommendations():
                 is_direct_country_match = selected_countries and trip.country_id in selected_countries
                 is_continent_match = selected_continents and trip.country and trip.country.continent.name in selected_continents
                 
-                if is_direct_country_match:
+                # Special case: Antarctica continent selection = direct country match
+                is_antarctica_continent_match = (
+                    selected_continents and 'ANTARCTICA' in selected_continents and 
+                    trip.country and trip.country.name == 'Antarctica'
+                )
+                
+                if is_direct_country_match or is_antarctica_continent_match:
                     current_score += weights['GEO_DIRECT_COUNTRY']
                     match_details.append(f"Country Match [+{weights['GEO_DIRECT_COUNTRY']:.0f}]")
                 elif is_continent_match:
@@ -1266,7 +1275,14 @@ def get_recommendations():
                 if selected_countries or selected_continents:
                     is_direct_country_match = selected_countries and trip.country_id in selected_countries
                     is_continent_match = selected_continents and trip.country and trip.country.continent.name in selected_continents
-                    if is_direct_country_match:
+                    
+                    # Special case: Antarctica continent selection = direct country match
+                    is_antarctica_continent_match = (
+                        selected_continents and 'ANTARCTICA' in selected_continents and 
+                        trip.country and trip.country.name == 'Antarctica'
+                    )
+                    
+                    if is_direct_country_match or is_antarctica_continent_match:
                         current_score += weights['GEO_DIRECT_COUNTRY']
                     elif is_continent_match:
                         current_score += weights['GEO_CONTINENT']
