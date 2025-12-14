@@ -10,10 +10,13 @@ from models import Country, Guide, Tag, Trip, TripTag, TripType, Continent, Gend
 from faker import Faker
 from datetime import datetime, timedelta
 import random
+import csv
+import os
 
-# Initialize Faker for Hebrew and English
+# Initialize Faker for Hebrew and English with fixed seed for reproducibility
 fake_he = Faker('he_IL')
 fake_en = Faker('en_US')
+Faker.seed(42)  # Ensure consistent fake data across environments
 
 
 # ============================================
@@ -39,6 +42,10 @@ def seed_database():
     print("\n" + "="*70)
     print("SMARTRIP DATABASE SEED - WITH TRIPTYPE FOREIGN KEY LOGIC")
     print("="*70 + "\n")
+    
+    # Set fixed random seed for reproducible data across environments
+    random.seed(42)
+    print("[SEED] Using fixed random seed (42) for consistent data generation\n")
     
     # Initialize database (create tables)
     init_db()
@@ -250,9 +257,9 @@ def seed_database():
         print(f"SUCCESS: Seeded {theme_count} Theme Tags with consistent IDs\n")
         
         # ============================================
-        # SEED GUIDES (5 Specific + 20 Generated)
+        # IMPORT GUIDES FROM CSV
         # ============================================
-        print("[SEEDING] Guides...")
+        print("[IMPORTING] Guides from CSV...")
         
         # 5 Specific hardcoded guides
         specific_guides = [
