@@ -487,6 +487,11 @@ function SearchPageContent() {
   const [countries, setCountries] = useState<Country[]>(FALLBACK_COUNTRIES);
   const [isLoadingCountries, setIsLoadingCountries] = useState(true);
 
+  // Trip Types and Tags from API (dynamic)
+  const [tripTypes, setTripTypes] = useState<Tag[]>(MOCK_TYPE_TAGS);
+  const [themeTags, setThemeTags] = useState<Tag[]>(MOCK_THEME_TAGS);
+  const [isLoadingTypes, setIsLoadingTypes] = useState(true);
+
   // Location search state
   const [locationSearch, setLocationSearch] = useState('');
   const [isLocationDropdownOpen, setIsLocationDropdownOpen] = useState(false);
@@ -559,6 +564,51 @@ function SearchPageContent() {
     };
 
     fetchCountries();
+  }, []);
+
+  // Fetch trip types and tags from API on mount
+  useEffect(() => {
+    const fetchTypesAndTags = async () => {
+      try {
+        // Fetch trip types
+        const typesResponse = await fetch(`${API_URL}/api/trip-types`);
+        if (typesResponse.ok) {
+          const typesData = await typesResponse.json();
+          if (typesData.data && typesData.data.length > 0) {
+            const mappedTypes: Tag[] = typesData.data.map((t: any) => ({
+              id: t.id,
+              name: t.name,
+              nameHe: t.name_he || t.nameHe || t.name,
+              category: 'Type'
+            }));
+            setTripTypes(mappedTypes);
+          }
+        }
+
+        // Fetch tags (themes)
+        const tagsResponse = await fetch(`${API_URL}/api/tags`);
+        if (tagsResponse.ok) {
+          const tagsData = await tagsResponse.json();
+          if (tagsData.ok) {
+            const mappedTags: Tag[] = tagsData.data
+              .filter((t: any) => t.category === 'THEME')
+              .map((t: any) => ({
+                id: t.id,
+                name: t.name,
+                nameHe: t.name_he || t.nameHe || t.name,
+                category: 'Theme'
+              }));
+            setThemeTags(mappedTags);
+          }
+        }
+      } catch (error) {
+        console.log('Failed to fetch types/tags from API, using fallback data');
+      } finally {
+        setIsLoadingTypes(false);
+      }
+    };
+
+    fetchTypesAndTags();
   }, []);
 
   // Close dropdown when clicking outside
@@ -935,7 +985,7 @@ function SearchPageContent() {
           <p className="text-sm text-gray-600 mb-3 md:mb-4 text-right">בחר סגנון טיול אחד</p>
 
           <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2 md:gap-4">
-            {MOCK_TYPE_TAGS.map(tag => (
+            {tripTypes.map(tag => (
               <TagCircle
                 key={tag.id}
                 tag={tag}
@@ -971,7 +1021,7 @@ function SearchPageContent() {
           </p>
 
           <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2 md:gap-4">
-            {MOCK_THEME_TAGS.map(tag => (
+            {themeTags.map(tag => (
               <TagCircle
                 key={tag.id}
                 tag={tag}
