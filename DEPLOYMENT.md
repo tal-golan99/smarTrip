@@ -1,212 +1,239 @@
-# Deployment Guide
+# Deployment Guide - Update Existing Deployments
 
-## Quick Deploy
+This guide is for updating your EXISTING Render and Vercel deployments with the latest changes.
 
-### Backend (Render)
+## Quick Update Steps
 
-1. Push code to GitHub
-2. Go to [Render Dashboard](https://dashboard.render.com/)
-3. Click "New" → "Blueprint"
-4. Connect your repository
-5. Render will automatically detect `render.yaml`
-6. Set environment variables:
-   - `FRONTEND_URL`: Your Vercel URL
-   - `DATABASE_URL`: Auto-configured from PostgreSQL
-   - `SECRET_KEY`: Auto-generated
-7. Click "Apply"
-8. After deployment, run seed script in Shell:
-   ```bash
-   cd backend && python seed.py
-   ```
+### 1. Update Backend on Render
 
-### Frontend (Vercel)
+Your backend will automatically redeploy when you push to GitHub (if auto-deploy is enabled).
 
-1. Push code to GitHub
-2. Go to [Vercel Dashboard](https://vercel.com/dashboard)
-3. Click "Add New" → "Project"
-4. Import your repository
-5. Configure:
-   - Framework Preset: Next.js
-   - Root Directory: ./
-   - Build Command: npm run build
-   - Output Directory: .next
-6. Add environment variable:
-   - `NEXT_PUBLIC_API_URL`: Your Render backend URL
-7. Click "Deploy"
+**Manual Redeploy:**
+1. Go to [Render Dashboard](https://dashboard.render.com/)
+2. Select your backend service
+3. Click "Manual Deploy" → "Deploy latest commit"
+4. Wait for deployment to complete (2-3 minutes)
 
-## Manual Deployment
-
-### Backend on Render
-
-1. Create Web Service
-2. Configure:
-   - Name: smarttrip-backend
-   - Environment: Python 3
-   - Region: Oregon (or closest to you)
-   - Branch: main
-   - Root Directory: backend
-   - Build Command: `pip install -r requirements.txt`
-   - Start Command: `gunicorn app:app`
-
-3. Add Environment Variables:
-   ```
-   FLASK_ENV=production
-   SECRET_KEY=<generate-secure-key>
-   DATABASE_URL=<postgres-connection-string>
-   FRONTEND_URL=<your-vercel-url>
-   PORT=5000
-   HOST=0.0.0.0
-   ```
-
-4. Create PostgreSQL Database:
-   - In Render, create new PostgreSQL database
-   - Name: smarttrip-db
-   - Copy Internal Database URL
-   - Add to backend as DATABASE_URL
-
-5. Seed Database:
-   - Go to backend Shell tab
-   - Run: `python seed.py`
-
-### Frontend on Vercel
-
-1. Import Project
-2. Configure:
-   - Framework: Next.js (auto-detected)
-   - Root Directory: ./
-   - Build Command: `npm run build`
-   - Output Directory: `.next`
-   - Install Command: `npm install`
-
-3. Environment Variables:
-   ```
-   NEXT_PUBLIC_API_URL=https://your-backend.onrender.com
-   ```
-
-4. Deploy
-
-## Troubleshooting
-
-### Backend Issues
-
-**Issue: Backend returns 500 errors**
-- Check DATABASE_URL is correctly set
-- Verify database is seeded: `python seed.py`
-- Check logs in Render dashboard
-
-**Issue: CORS errors**
-- Update FRONTEND_URL in backend environment
-- Verify CORS origins in app.py match your frontend URL
-
-**Issue: Database connection fails**
-- Ensure DATABASE_URL includes all parameters
-- Check database is running in Render
-- Verify PostgreSQL version compatibility (12+)
-
-### Frontend Issues
-
-**Issue: API calls fail**
-- Verify NEXT_PUBLIC_API_URL is set correctly
-- Check backend is running and accessible
-- Test backend health: `https://your-backend.onrender.com/api/health`
-
-**Issue: Build fails**
-- Run `npm install` locally to check for dependency issues
-- Check Node.js version matches (18+)
-- Review build logs in Vercel
-
-**Issue: Environment variables not working**
-- Redeploy after adding/changing environment variables
-- Ensure NEXT_PUBLIC_ prefix for client-side variables
-- Check variables in Vercel project settings
-
-## Environment Variables Reference
-
-### Backend (.env for local, Render env vars for production)
-```
-FLASK_APP=app.py
-FLASK_ENV=development|production
-SECRET_KEY=your-secret-key
-DATABASE_URL=postgresql://user:pass@host:port/dbname
-PORT=5000
-HOST=0.0.0.0
-FRONTEND_URL=http://localhost:3000|https://your-app.vercel.app
-```
-
-### Frontend (.env.local for local, Vercel env vars for production)
-```
-NEXT_PUBLIC_API_URL=http://localhost:5000|https://your-backend.onrender.com
-```
-
-## Testing Production Deployment
-
-### Backend
+**Check deployment:**
 ```bash
 curl https://your-backend.onrender.com/api/health
 ```
 
-Expected response:
+### 2. Update Frontend on Vercel
+
+Your frontend will automatically redeploy when you push to GitHub.
+
+**Manual Redeploy:**
+1. Go to [Vercel Dashboard](https://vercel.com/dashboard)
+2. Select your project
+3. Go to "Deployments" tab
+4. Click "..." on latest commit → "Redeploy"
+
+**Check deployment:**
+Visit: `https://your-app.vercel.app`
+
+## Database Seeding (For Free Tier Users)
+
+Since Render's free tier doesn't have Shell access, you need to trigger seeding through the API.
+
+### Option 1: Add a Seed Endpoint (Recommended)
+
+I've added a `/api/seed` endpoint that you can call to seed the database:
+
+```bash
+curl -X POST https://your-backend.onrender.com/api/seed
+```
+
+This will seed the database if it's empty or needs updating.
+
+### Option 2: Manual Database Update
+
+If you need to update the database manually:
+
+1. Use a PostgreSQL client (e.g., DBeaver, pgAdmin)
+2. Get connection string from Render:
+   - Go to your database in Render
+   - Copy "External Database URL"
+3. Connect and run SQL scripts manually
+
+### Check if Database is Seeded
+
+```bash
+curl https://your-backend.onrender.com/api/health
+```
+
+Should show:
 ```json
 {
   "status": "healthy",
   "database": {
     "trips": 587,
     "countries": 105,
-    "guides": 12
+    "guides": 12,
+    "tags": 12,
+    "trip_types": 10
   }
 }
 ```
 
-### Frontend
-Visit: `https://your-app.vercel.app`
+If counts are 0, the database needs seeding.
 
-Should load home page and allow navigation to search.
+## Environment Variables
 
-## Post-Deployment Checklist
+### Backend (Render)
 
-- [ ] Backend health check responds
-- [ ] Frontend loads without errors
-- [ ] Search form works
-- [ ] Recommendations display correctly
-- [ ] Trip details page loads
-- [ ] Database has 587 trips
-- [ ] Hebrew text displays correctly (RTL)
-- [ ] CORS allows frontend to access backend
+Check that these are set in Render:
+- `FLASK_ENV`: production
+- `DATABASE_URL`: (auto-set by Render PostgreSQL)
+- `SECRET_KEY`: (should already be set)
+- `FRONTEND_URL`: Update to match your Vercel URL if it changed
+- `PORT`: 5000
+- `HOST`: 0.0.0.0
+
+**To update:**
+1. Go to your service in Render
+2. Click "Environment" in left sidebar
+3. Update variables
+4. Click "Save Changes" (triggers redeploy)
+
+### Frontend (Vercel)
+
+Check that this is set in Vercel:
+- `NEXT_PUBLIC_API_URL`: Your Render backend URL
+
+**To update:**
+1. Go to your project in Vercel
+2. Click "Settings" → "Environment Variables"
+3. Update `NEXT_PUBLIC_API_URL`
+4. Redeploy for changes to take effect
+
+## Troubleshooting
+
+### Backend Issues
+
+**Issue: 500 errors after deployment**
+- Check Render logs: Service → Logs tab
+- Verify DATABASE_URL is correct
+- Try manual seed: `curl -X POST https://your-backend.onrender.com/api/seed`
+
+**Issue: CORS errors**
+- Update FRONTEND_URL in Render environment variables
+- Make sure it matches your Vercel URL exactly
+- Redeploy after changing
+
+**Issue: Database connection fails**
+- Check if database is running in Render dashboard
+- Verify DATABASE_URL is set correctly
+- Check if database is on same region as backend
+
+### Frontend Issues
+
+**Issue: API calls failing**
+- Check NEXT_PUBLIC_API_URL in Vercel settings
+- Test backend health endpoint directly
+- Make sure backend is deployed and running
+
+**Issue: 404 errors on routes**
+- Redeploy frontend after adding new files
+- Check build logs in Vercel for errors
+- Verify all required files are committed to Git
+
+**Issue: Changes not appearing**
+- Clear Vercel cache: Settings → Clear Cache
+- Force redeploy: Deployments → Redeploy
+- Check correct branch is deployed
+
+## Auto-Deploy Setup
+
+### Render
+1. Go to your service
+2. Settings → "Build & Deploy"
+3. Enable "Auto-Deploy: Yes"
+4. Select branch: main
+
+### Vercel
+Auto-deploy is enabled by default for connected repos.
 
 ## Monitoring
 
-### Backend
-- Monitor logs in Render dashboard
-- Set up health check alerts
-- Check database connection pool
+### Check Backend Health
+```bash
+curl https://your-backend.onrender.com/api/health
+```
 
-### Frontend
-- Monitor Vercel Analytics
-- Check build logs for warnings
-- Review Runtime Logs for errors
+### Check Frontend
+Visit: https://your-app.vercel.app
 
-## Scaling
+### View Logs
 
-### Backend
-- Render automatically scales based on traffic
-- Consider upgrading to paid plan for:
-  - More memory (512MB → 2GB+)
-  - Better CPU
-  - No sleep on free tier
+**Render:**
+- Dashboard → Your Service → Logs
 
-### Frontend
-- Vercel handles scaling automatically
-- No additional configuration needed
+**Vercel:**
+- Dashboard → Your Project → Deployments → Click deployment → Runtime Logs
 
-## Backup
+## Performance Notes
 
-### Database
-1. In Render dashboard, go to PostgreSQL database
-2. Download latest backup
-3. Schedule regular backups (available on paid plans)
+### Render Free Tier
+- Services spin down after 15 minutes of inactivity
+- First request after spin-down takes 30-60 seconds (cold start)
+- No persistent shell access
+- 512 MB RAM limit
 
-### Code
-- Ensure GitHub repository is up to date
-- Tag releases: `git tag -a v1.0.0 -m "Release 1.0.0"`
-- Push tags: `git push origin --tags`
+### Solutions for Cold Starts
+1. Use Render's paid plan (no sleep)
+2. Set up a ping service (e.g., UptimeRobot) to keep it awake
+3. Accept the cold start delay (acceptable for development/testing)
 
+## Database Backup
+
+### Render PostgreSQL
+1. Go to database in Render dashboard
+2. Click "Backups" tab
+3. Download latest backup
+4. Free tier: Manual backups only
+5. Paid tier: Automatic daily backups
+
+## Rollback
+
+### Backend (Render)
+1. Go to Deployments tab
+2. Find previous successful deployment
+3. Click "..." → "Redeploy"
+
+### Frontend (Vercel)
+1. Go to Deployments tab
+2. Find previous successful deployment
+3. Click "..." → "Promote to Production"
+
+## Testing After Deployment
+
+Run these checks after each deployment:
+
+**Backend:**
+```bash
+# Health check
+curl https://your-backend.onrender.com/api/health
+
+# Test recommendations
+curl -X POST https://your-backend.onrender.com/api/recommendations \
+  -H "Content-Type: application/json" \
+  -d '{"budget": 10000}'
+```
+
+**Frontend:**
+1. Visit home page
+2. Go to /search
+3. Submit a search
+4. Verify results display
+5. Click on a trip
+6. Verify trip details load
+
+## Support
+
+If you encounter issues:
+1. Check logs in Render/Vercel dashboards
+2. Verify environment variables
+3. Test backend health endpoint
+4. Check CORS settings
+5. Review deployment logs for errors
