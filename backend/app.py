@@ -192,22 +192,13 @@ def migrate_database():
     Use this when schema changes and you need to update production database.
     """
     try:
-        from database import drop_db, init_db
-        from seed import seed_database
+        from seed_from_csv import seed_from_csv
         
         print("[MIGRATE] Starting database migration...", flush=True)
+        print("[MIGRATE] Importing data from CSV files...", flush=True)
         
-        # Drop all tables
-        print("[MIGRATE] Dropping existing tables...", flush=True)
-        drop_db()
-        
-        # Recreate tables with new schema
-        print("[MIGRATE] Creating tables with new schema...", flush=True)
-        init_db()
-        
-        # Seed data
-        print("[MIGRATE] Seeding database with data...", flush=True)
-        seed_database()
+        # Seed data from CSV
+        seed_from_csv()
         
         # Verify
         trip_count = db_session.query(Trip).count()

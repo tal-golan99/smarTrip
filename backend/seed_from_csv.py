@@ -24,177 +24,68 @@ def seed_from_csv():
     
     try:
         # ============================================
-        # SEED COUNTRIES (Static Data)
+        # IMPORT COUNTRIES FROM CSV
         # ============================================
-        print("[SEEDING] Countries...")
+        print("[IMPORTING] Countries from CSV...")
         
-        countries_data = [
-            # ASIA
-            ('India', 'הודו', Continent.ASIA),
-            ('Japan', 'יפן', Continent.ASIA),
-            ('Thailand', 'תאילנד', Continent.ASIA),
-            ('Vietnam', 'וייטנם', Continent.ASIA),
-            ('China', 'סין', Continent.ASIA),
-            ('South Korea', 'דרום קוריאה', Continent.ASIA),
-            ('Indonesia', 'אינדונזיה', Continent.ASIA),
-            ('Malaysia', 'מלזיה', Continent.ASIA),
-            ('Nepal', 'נפאל', Continent.ASIA),
-            ('Sri Lanka', 'סרי לנקה', Continent.ASIA),
-            ('Cambodia', 'קמבודיה', Continent.ASIA),
-            ('Laos', 'לאוס', Continent.ASIA),
-            ('Myanmar', 'מיאנמר', Continent.ASIA),
-            ('Philippines', 'פיליפינים', Continent.ASIA),
-            ('Mongolia', 'מונגוליה', Continent.ASIA),
-            ('Bhutan', 'בהוטן', Continent.ASIA),
-            
-            # AFRICA
-            ('South Africa', 'דרום אפריקה', Continent.AFRICA),
-            ('Kenya', 'קניה', Continent.AFRICA),
-            ('Tanzania', 'טנזניה', Continent.AFRICA),
-            ('Morocco', 'מרוקו', Continent.AFRICA),
-            ('Egypt', 'מצרים', Continent.AFRICA),
-            ('Uganda', 'אוגנדה', Continent.AFRICA),
-            ('Rwanda', 'רואנדה', Continent.AFRICA),
-            ('Zimbabwe', 'זימבבואה', Continent.AFRICA),
-            ('Namibia', 'נמיביה', Continent.AFRICA),
-            ('Botswana', 'בוטסואנה', Continent.AFRICA),
-            ('Zambia', 'זמביה', Continent.AFRICA),
-            ('Senegal', 'סנגל', Continent.AFRICA),
-            ('Ghana', 'גאנה', Continent.AFRICA),
-            ('Ethiopia', 'אתיופיה', Continent.AFRICA),
-            ('Madagascar', 'מדגסקר', Continent.AFRICA),
-            ('Tunisia', 'תוניסיה', Continent.AFRICA),
-            
-            # OCEANIA
-            ('Australia', 'אוסטרליה', Continent.OCEANIA),
-            ('New Zealand', 'ניו זילנד', Continent.OCEANIA),
-            ('Fiji', 'פיג\'י', Continent.OCEANIA),
-            ('Papua New Guinea', 'פפואה גינאה החדשה', Continent.OCEANIA),
-            ('Tahiti', 'טהיטי', Continent.OCEANIA),
-            ('Samoa', 'סמואה', Continent.OCEANIA),
-            ('Vanuatu', 'ונואטו', Continent.OCEANIA),
-            ('New Caledonia', 'קלדוניה החדשה', Continent.OCEANIA),
-            ('Cook Islands', 'איי קוק', Continent.OCEANIA),
-            
-            # EUROPE
-            ('Italy', 'איטליה', Continent.EUROPE),
-            ('Greece', 'יוון', Continent.EUROPE),
-            ('Iceland', 'איסלנד', Continent.EUROPE),
-            ('Ireland', 'אירלנד', Continent.EUROPE),
-            ('England', 'אנגליה', Continent.EUROPE),
-            ('Scotland', 'סקוטלנד', Continent.EUROPE),
-            ('Estonia', 'אסטוניה', Continent.EUROPE),
-            ('Austria', 'אוסטריה', Continent.EUROPE),
-            ('Albania', 'אלבניה', Continent.EUROPE),
-            ('Germany', 'גרמניה', Continent.EUROPE),
-            ('Holland', 'הולנד', Continent.EUROPE),
-            ('Hungary', 'הונגריה', Continent.EUROPE),
-            ('Wales', 'וויילס', Continent.EUROPE),
-            ('Georgia', 'גיאורגיה', Continent.EUROPE),
-            ('Denmark', 'דנמרק', Continent.EUROPE),
-            ('Turkey', 'טורקיה', Continent.EUROPE),
-            ('Latvia', 'לטביה', Continent.EUROPE),
-            ('Lithuania', 'ליטא', Continent.EUROPE),
-            ('Montenegro', 'מונטנגרו', Continent.EUROPE),
-            ('Malta', 'מלטה', Continent.EUROPE),
-            ('Macedonia', 'מקדוניה', Continent.EUROPE),
-            ('Norway', 'נורבגיה', Continent.EUROPE),
-            ('Sicily', 'סיציליה', Continent.EUROPE),
-            ('Slovenia', 'סלובניה', Continent.EUROPE),
-            ('Slovakia', 'סלובקיה', Continent.EUROPE),
-            ('Spain', 'ספרד', Continent.EUROPE),
-            ('Scandinavia', 'סקנדינביה', Continent.EUROPE),
-            ('Serbia', 'סרביה', Continent.EUROPE),
-            ('Sardinia', 'סרדיניה', Continent.EUROPE),
-            ('Poland', 'פולין', Continent.EUROPE),
-            ('Portugal', 'פורטוגל', Continent.EUROPE),
-            ('Czech Republic', 'צ\'כיה', Continent.EUROPE),
-            ('France', 'צרפת', Continent.EUROPE),
-            ('Corsica', 'קורסיקה', Continent.EUROPE),
-            ('Croatia', 'קרואטיה', Continent.EUROPE),
-            ('Romania', 'רומניה', Continent.EUROPE),
-            ('Russia', 'רוסיה', Continent.EUROPE),
-            ('Switzerland', 'שוויץ', Continent.EUROPE),
-            
-            # NORTH & CENTRAL AMERICA
-            ('United States', 'ארצות הברית', Continent.NORTH_AND_CENTRAL_AMERICA),
-            ('Guatemala', 'גואטמלה', Continent.NORTH_AND_CENTRAL_AMERICA),
-            ('Hawaii', 'הוואי', Continent.NORTH_AND_CENTRAL_AMERICA),
-            ('Mexico', 'מקסיקו', Continent.NORTH_AND_CENTRAL_AMERICA),
-            ('Panama', 'פנמה', Continent.NORTH_AND_CENTRAL_AMERICA),
-            ('Cuba', 'קובה', Continent.NORTH_AND_CENTRAL_AMERICA),
-            ('Costa Rica', 'קוסטה ריקה', Continent.NORTH_AND_CENTRAL_AMERICA),
-            ('Canada', 'קנדה', Continent.NORTH_AND_CENTRAL_AMERICA),
-            
-            # SOUTH AMERICA
-            ('Ecuador', 'אקוודור', Continent.SOUTH_AMERICA),
-            ('Argentina', 'ארגנטינה', Continent.SOUTH_AMERICA),
-            ('Bolivia', 'בוליביה', Continent.SOUTH_AMERICA),
-            ('Brazil', 'ברזיל', Continent.SOUTH_AMERICA),
-            ('Peru', 'פרו', Continent.SOUTH_AMERICA),
-            ('Chile', 'צ\'ילה', Continent.SOUTH_AMERICA),
-            ('Colombia', 'קולומביה', Continent.SOUTH_AMERICA),
-            
-            # ANTARCTICA
-            ('Antarctica', 'אנטארקטיקה', Continent.ANTARCTICA),
-        ]
-        
-        for name, name_he, continent in countries_data:
-            country = Country(name=name, name_he=name_he, continent=continent)
-            session.add(country)
+        with open('data/countries.csv', 'r', encoding='utf-8') as f:
+            reader = csv.DictReader(f)
+            countries_imported = 0
+            for row in reader:
+                country = Country(
+                    id=int(row['id']),
+                    name=row['name'],
+                    name_he=row['name_he'],
+                    continent=Continent(row['continent'])
+                )
+                session.add(country)
+                countries_imported += 1
         
         session.commit()
-        print(f"[OK] Seeded {len(countries_data)} countries\n")
+        print(f"[OK] Imported {countries_imported} countries\n")
         
         # ============================================
-        # SEED TRIP TYPES (Static Data with Fixed IDs)
+        # IMPORT TRIP TYPES FROM CSV
         # ============================================
-        print("[SEEDING] Trip Types...")
+        print("[IMPORTING] Trip Types from CSV...")
         
-        trip_types_data = [
-            (1, 'Geographic Depth', 'טיולי עומק גיאוגרפיים', 'In-depth geographical exploration tours'),
-            (2, 'Carnivals & Festivals', 'קרנבלים ופסטיבלים', 'Cultural carnivals and festivals'),
-            (3, 'African Safari', 'ספארי באפריקה', 'Wildlife safari adventures in Africa'),
-            (4, 'Train Tours', 'טיולי רכבות', 'Scenic railway journeys'),
-            (5, 'Geographic Cruises', 'טיולי שייט גיאוגרפיים', 'Maritime exploration cruises'),
-            (6, 'Nature Hiking', 'טיולי הליכות בטבע', 'Nature walks and hiking'),
-            (7, 'Jeep Tours', 'טיולי ג\'יפים', '4x4 off-road adventures'),
-            (8, 'Snowmobile Tours', 'טיולי אופנועי שלג', 'Arctic snowmobile expeditions'),
-            (9, 'Photography', 'טיולי צילום', 'Photography-focused tours'),
-            (10, 'Private Groups', 'קבוצות סגורות', 'Exclusive private group tours'),
-        ]
-        
-        for type_id, name, name_he, description in trip_types_data:
-            trip_type = TripType(id=type_id, name=name, name_he=name_he, description=description)
-            session.add(trip_type)
+        with open('data/trip_types.csv', 'r', encoding='utf-8') as f:
+            reader = csv.DictReader(f)
+            types_imported = 0
+            for row in reader:
+                trip_type = TripType(
+                    id=int(row['id']),
+                    name=row['name'],
+                    name_he=row['name_he'],
+                    description=row['description'] if row['description'] else None
+                )
+                session.add(trip_type)
+                types_imported += 1
         
         session.commit()
-        print(f"[OK] Seeded {len(trip_types_data)} trip types\n")
+        print(f"[OK] Imported {types_imported} trip types\n")
         
         # ============================================
-        # SEED TAGS (Static Data with Fixed IDs)
+        # IMPORT TAGS FROM CSV
         # ============================================
-        print("[SEEDING] Theme Tags...")
+        print("[IMPORTING] Tags from CSV...")
         
-        theme_tags_data = [
-            (1, 'Cultural & Historical', 'תרבות והיסטוריה', 'Cultural immersion and historical heritage sites'),
-            (2, 'Wildlife', 'חיות בר', 'Wildlife observation tours'),
-            (3, 'Extreme', 'אקסטרים', 'Extreme adventure and challenge'),
-            (4, 'Food & Wine', 'אוכל ויין', 'Culinary and wine tours'),
-            (5, 'Beach & Island', 'חופים ואיים', 'Beach and island getaways'),
-            (6, 'Mountain', 'הרים', 'Mountain expeditions'),
-            (7, 'Desert', 'מדבר', 'Desert exploration'),
-            (8, 'Arctic & Snow', 'קרח ושלג', 'Arctic and winter expeditions'),
-            (9, 'Tropical', 'טרופי', 'Tropical destinations'),
-            (11, 'Hanukkah & Christmas Lights', 'אורות חנוכה וכריסמס', 'Holiday lights and festive tours'),
-        ]
-        
-        for tag_id, name, name_he, description in theme_tags_data:
-            tag = Tag(id=tag_id, name=name, name_he=name_he, description=description, category=TagCategory.THEME)
-            session.add(tag)
+        with open('data/tags.csv', 'r', encoding='utf-8') as f:
+            reader = csv.DictReader(f)
+            tags_imported = 0
+            for row in reader:
+                tag = Tag(
+                    id=int(row['id']),
+                    name=row['name'],
+                    name_he=row['name_he'],
+                    description=row['description'] if row['description'] else None,
+                    category=TagCategory(row['category'])
+                )
+                session.add(tag)
+                tags_imported += 1
         
         session.commit()
-        print(f"[OK] Seeded {len(theme_tags_data)} theme tags\n")
+        print(f"[OK] Imported {tags_imported} tags\n")
         
         # ============================================
         # IMPORT GUIDES FROM CSV

@@ -18,8 +18,54 @@ def export_to_csv():
         print("EXPORTING DATABASE TO CSV FILES")
         print("="*70 + "\n")
         
+        # Export Countries
+        print("[1/5] Exporting Countries...")
+        countries = session.query(Country).all()
+        with open('data/countries.csv', 'w', newline='', encoding='utf-8') as f:
+            writer = csv.writer(f)
+            writer.writerow(['id', 'name', 'name_he', 'continent'])
+            for c in countries:
+                writer.writerow([
+                    c.id,
+                    c.name,
+                    c.name_he,
+                    c.continent.value if c.continent else ''
+                ])
+        print(f"   [OK] Exported {len(countries)} countries\n")
+        
+        # Export Trip Types
+        print("[2/5] Exporting Trip Types...")
+        trip_types = session.query(TripType).all()
+        with open('data/trip_types.csv', 'w', newline='', encoding='utf-8') as f:
+            writer = csv.writer(f)
+            writer.writerow(['id', 'name', 'name_he', 'description'])
+            for tt in trip_types:
+                writer.writerow([
+                    tt.id,
+                    tt.name,
+                    tt.name_he,
+                    tt.description or ''
+                ])
+        print(f"   [OK] Exported {len(trip_types)} trip types\n")
+        
+        # Export Tags
+        print("[3/5] Exporting Tags...")
+        tags = session.query(Tag).all()
+        with open('data/tags.csv', 'w', newline='', encoding='utf-8') as f:
+            writer = csv.writer(f)
+            writer.writerow(['id', 'name', 'name_he', 'description', 'category'])
+            for tag in tags:
+                writer.writerow([
+                    tag.id,
+                    tag.name,
+                    tag.name_he,
+                    tag.description or '',
+                    tag.category.value if tag.category else ''
+                ])
+        print(f"   [OK] Exported {len(tags)} tags\n")
+        
         # Export Guides
-        print("[1/3] Exporting Guides...")
+        print("[4/5] Exporting Guides...")
         guides = session.query(Guide).all()
         with open('data/guides.csv', 'w', newline='', encoding='utf-8') as f:
             writer = csv.writer(f)
@@ -40,7 +86,7 @@ def export_to_csv():
         print(f"   [OK] Exported {len(guides)} guides\n")
         
         # Export Trips
-        print("[2/3] Exporting Trips...")
+        print("[5/5] Exporting Trips...")
         trips = session.query(Trip).all()
         with open('data/trips.csv', 'w', newline='', encoding='utf-8') as f:
             writer = csv.writer(f)
@@ -73,7 +119,7 @@ def export_to_csv():
         print(f"   [OK] Exported {len(trips)} trips\n")
         
         # Export Trip-Tag Relationships
-        print("[3/3] Exporting Trip-Tag Relationships...")
+        print("[6/6] Exporting Trip-Tag Relationships...")
         trip_tags = session.query(TripTag).all()
         with open('data/trip_tags.csv', 'w', newline='', encoding='utf-8') as f:
             writer = csv.writer(f)
@@ -86,6 +132,9 @@ def export_to_csv():
         print("EXPORT COMPLETE!")
         print("="*70)
         print(f"\nFiles created:")
+        print(f"  - data/countries.csv ({len(countries)} rows)")
+        print(f"  - data/trip_types.csv ({len(trip_types)} rows)")
+        print(f"  - data/tags.csv ({len(tags)} rows)")
         print(f"  - data/guides.csv ({len(guides)} rows)")
         print(f"  - data/trips.csv ({len(trips)} rows)")
         print(f"  - data/trip_tags.csv ({len(trip_tags)} rows)")

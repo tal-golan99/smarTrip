@@ -1,106 +1,123 @@
 id,name,name_he,continent
-1,Uganda,אוגנדה,Africa
-2,Ethiopia,אתיופיה,Africa
-3,Botswana,בוטסוואנה,Africa
-4,South Africa,דרום אפריקה,Africa
-5,Tunisia,טוניסיה,Africa
-6,Tanzania,טנזניה,Africa
-7,Madagascar,מדגסקר,Africa
-8,Egypt,מצרים,Africa
-9,Morocco,מרוקו,Africa
-10,Namibia,נמיביה,Africa
-11,Kenya,קניה,Africa
-12,Rwanda,רואנדה,Africa
-13,Uzbekistan,אוזבקיסטן,Asia
-14,Azerbaijan,אזרבייג'ן,Asia
-15,United Arab Emirates,איחוד האמירויות,Asia
-16,Indonesia,אינדונזיה,Asia
-17,Bhutan,בהוטן,Asia
-18,Myanmar,בורמה,Asia
-19,India,הודו,Asia
-20,Hong Kong,הונג קונג,Asia
-21,Vietnam,וייטנאם,Asia
-22,Taiwan,טאיוואן,Asia
-23,Tajikistan,טג'יקיסטן,Asia
-24,Turkey,טורקיה,Asia
-25,Tibet,טיבט,Asia
-26,Japan,יפן,Asia
-27,Jordan,ירדן,Asia
-28,Israel,ישראל,Asia
-29,Laos,לאוס,Asia
-30,Mongolia,מונגוליה,Asia
-31,Nepal,נפאל,Asia
-32,China,סין,Asia
-33,Singapore,סינגפור,Asia
-34,Sri Lanka,סרי לנקה,Asia
-35,Oman,עומאן,Asia
-36,Philippines,פיליפינים,Asia
-37,North Korea,צפון קוריאה,Asia
-38,South Korea,קוריאה הדרומית,Asia
-39,Kyrgyzstan,קירגיזסטן,Asia
-40,Cambodia,קמבודיה,Asia
-41,Thailand,תאילנד,Asia
-42,Austria,אוסטריה,Europe
-43,Ukraine,אוקראינה,Europe
-44,Italy,איטליה,Europe
-45,Azores,איים האזורים,Europe
-46,Canary Islands,איים הקנריים,Europe
-47,Iceland,איסלנד,Europe
-48,Ireland,אירלנד,Europe
-49,Albania,אלבניה,Europe
-50,England,אנגליה,Europe
-51,Estonia,אסטוניה,Europe
-52,Armenia,ארמניה,Europe
-53,Scotland,סקוטלנד,Europe
-54,Bulgaria,בולגריה,Europe
-55,Bosnia and Herzegovina,בוסניה והרצגובינה,Europe
-56,Belgium,בלגיה,Europe
-57,Georgia,גאורגיה,Europe
-58,Greenland,גרינלנד,Europe
-59,Germany,גרמניה,Europe
-60,Dagestan,דגסטאן,Europe
-61,Netherlands,הולנד,Europe
-62,Hungary,הונגריה,Europe
-63,Greece,יוון,Europe
-64,Crete,כרתים ואיי יוון,Europe
-65,Latvia,לטביה,Europe
-66,Lithuania,ליטא,Europe
-67,Lapland,לפלנד,Europe
-68,Madeira,מדירה,Europe
-69,Mont Blanc,מון בלאן,Europe
-70,Montenegro,מונטנגרו,Europe
-71,Malta,מלטה,Europe
-72,Macedonia,מקדוניה,Europe
-73,Norway,נורבגיה,Europe
-74,Sicily,סיציליה,Europe
-75,Slovenia,סלובניה,Europe
-76,Slovakia,סלובקיה,Europe
-77,Spain,ספרד,Europe
-78,Scandinavia,סקנדינביה,Europe
-79,Serbia,סרביה,Europe
-80,Sardinia,סרדיניה,Europe
-81,Poland,פולין,Europe
-82,Portugal,פורטוגל,Europe
-83,Czech Republic,צ'כיה,Europe
-84,France,צרפת,Europe
-85,Corsica,קורסיקה,Europe
-86,Croatia,קרואטיה,Europe
-87,Romania,רומניה,Europe
-88,Russia,רוסיה,Europe
-89,Switzerland,שוויץ,Europe
-90,United States,ארצות הברית,North & Central America
-91,Guatemala,גואטמלה,North & Central America
-92,Hawaii,הוואי,North & Central America
-93,Mexico,מקסיקו,North & Central America
-94,Panama,פנמה,North & Central America
-95,Cuba,קובה,North & Central America
-96,Costa Rica,קוסטה ריקה,North & Central America
-97,Canada,קנדה,North & Central America
-98,Ecuador,אקוודור,South America
-99,Argentina,ארגנטינה,South America
-100,Bolivia,בוליביה,South America
-101,Brazil,ברזיל,South America
-102,Peru,פרו,South America
-103,Chile,צ'ילה,South America
-104,Colombia,קולומביה,South America
-105,Antarctica,אנטארקטיקה,Antarctica
+1,India,הודו,Asia
+2,Japan,יפן,Asia
+3,Thailand,תאילנד,Asia
+4,Vietnam,וייטנם,Asia
+5,China,סין,Asia
+6,South Korea,דרום קוריאה,Asia
+7,Indonesia,אינדונזיה,Asia
+8,Malaysia,מלזיה,Asia
+9,Nepal,נפאל,Asia
+10,Sri Lanka,סרי לנקה,Asia
+11,Cambodia,קמבודיה,Asia
+12,Laos,לאוס,Asia
+13,Myanmar,מיאנמר,Asia
+14,Philippines,פיליפינים,Asia
+15,Mongolia,מונגוליה,Asia
+16,Bhutan,בהוטן,Asia
+17,South Africa,דרום אפריקה,Africa
+18,Kenya,קניה,Africa
+19,Tanzania,טנזניה,Africa
+20,Morocco,מרוקו,Africa
+21,Egypt,מצרים,Africa
+22,Uganda,אוגנדה,Africa
+23,Rwanda,רואנדה,Africa
+24,Zimbabwe,זימבבואה,Africa
+25,Namibia,נמיביה,Africa
+26,Botswana,בוטסואנה,Africa
+27,Zambia,זמביה,Africa
+28,Senegal,סנגל,Africa
+29,Ghana,גאנה,Africa
+30,Ethiopia,אתיופיה,Africa
+31,Madagascar,מדגסקר,Africa
+32,Tunisia,תוניסיה,Africa
+33,Australia,אוסטרליה,Oceania
+34,New Zealand,ניו זילנד,Oceania
+35,Fiji,פיג'י,Oceania
+36,Papua New Guinea,פפואה גינאה החדשה,Oceania
+37,Tahiti,טהיטי,Oceania
+38,Samoa,סמואה,Oceania
+39,Vanuatu,ונואטו,Oceania
+40,New Caledonia,קלדוניה החדשה,Oceania
+41,Cook Islands,איי קוק,Oceania
+42,Italy,איטליה,Europe
+43,Greece,יוון,Europe
+44,Iceland,איסלנד,Europe
+45,Ireland,אירלנד,Europe
+46,England,אנגליה,Europe
+47,Scotland,סקוטלנד,Europe
+48,Estonia,אסטוניה,Europe
+49,Austria,אוסטריה,Europe
+50,Albania,אלבניה,Europe
+51,Germany,גרמניה,Europe
+52,Holland,הולנד,Europe
+53,Hungary,הונגריה,Europe
+54,Wales,וויילס,Europe
+55,Georgia,גיאורגיה,Europe
+56,Denmark,דנמרק,Europe
+57,Turkey,טורקיה,Europe
+58,Latvia,לטביה,Europe
+59,Lithuania,ליטא,Europe
+60,Montenegro,מונטנגרו,Europe
+61,Malta,מלטה,Europe
+62,Macedonia,מקדוניה,Europe
+63,Norway,נורבגיה,Europe
+64,Sicily,סיציליה,Europe
+65,Slovenia,סלובניה,Europe
+66,Slovakia,סלובקיה,Europe
+67,Spain,ספרד,Europe
+68,Scandinavia,סקנדינביה,Europe
+69,Serbia,סרביה,Europe
+70,Sardinia,סרדיניה,Europe
+71,Poland,פולין,Europe
+72,Portugal,פורטוגל,Europe
+73,Czech Republic,צ'כיה,Europe
+74,France,צרפת,Europe
+75,Corsica,קורסיקה,Europe
+76,Croatia,קרואטיה,Europe
+77,Romania,רומניה,Europe
+78,Russia,רוסיה,Europe
+79,Switzerland,שוויץ,Europe
+80,United States,ארצות הברית,North & Central America
+81,Guatemala,גואטמלה,North & Central America
+82,Hawaii,הוואי,North & Central America
+83,Mexico,מקסיקו,North & Central America
+84,Panama,פנמה,North & Central America
+85,Cuba,קובה,North & Central America
+86,Costa Rica,קוסטה ריקה,North & Central America
+87,Canada,קנדה,North & Central America
+88,Ecuador,אקוודור,South America
+89,Argentina,ארגנטינה,South America
+90,Bolivia,בוליביה,South America
+91,Brazil,ברזיל,South America
+92,Peru,פרו,South America
+93,Chile,צ'ילה,South America
+94,Colombia,קולומביה,South America
+95,Antarctica,אנטארקטיקה,Antarctica
+96,Uzbekistan,אוזבקיסטן,Asia
+97,Azerbaijan,אזרבייג'ן,Asia
+98,United Arab Emirates,איחוד האמירויות,Asia
+99,Hong Kong,הונג קונג,Asia
+100,Taiwan,טאיוואן,Asia
+101,Tajikistan,טג'יקיסטן,Asia
+102,Tibet,טיבט,Asia
+103,Jordan,ירדן,Asia
+104,Israel,ישראל,Asia
+105,Singapore,סינגפור,Asia
+106,Oman,עומאן,Asia
+107,North Korea,צפון קוריאה,Asia
+108,Kyrgyzstan,קירגיזסטן,Asia
+109,Ukraine,אוקראינה,Europe
+110,Azores,איים האזורים,Europe
+111,Canary Islands,איים הקנריים,Europe
+112,Armenia,ארמניה,Europe
+113,Bulgaria,בולגריה,Europe
+114,Bosnia and Herzegovina,בוסניה והרצגובינה,Europe
+115,Belgium,בלגיה,Europe
+116,Greenland,גרינלנד,Europe
+117,Dagestan,דגסטאן,Europe
+118,Netherlands,הולנד,Europe
+119,Crete,כרתים ואיי יוון,Europe
+120,Lapland,לפלנד,Europe
+121,Madeira,מדירה,Europe
+122,Mont Blanc,מון בלאן,Europe

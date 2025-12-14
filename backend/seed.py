@@ -13,10 +13,9 @@ import random
 import csv
 import os
 
-# Initialize Faker for Hebrew and English with fixed seed for reproducibility
+# Initialize Faker for Hebrew and English
 fake_he = Faker('he_IL')
 fake_en = Faker('en_US')
-Faker.seed(42)  # Ensure consistent fake data across environments
 
 
 # ============================================
@@ -42,10 +41,6 @@ def seed_database():
     print("\n" + "="*70)
     print("SMARTRIP DATABASE SEED - WITH TRIPTYPE FOREIGN KEY LOGIC")
     print("="*70 + "\n")
-    
-    # Set fixed random seed for reproducible data across environments
-    random.seed(42)
-    print("[SEED] Using fixed random seed (42) for consistent data generation\n")
     
     # Initialize database (create tables)
     init_db()
