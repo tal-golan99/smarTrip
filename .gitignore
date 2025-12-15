@@ -84,3 +84,6 @@ migrate_*.py
 # Keep important guides
 !backend/RESEEDING_GUIDE.md
 !backend/SCHEMA_REFACTORING_COMPLETE.md
+
+# Personal documentation (not for GitHub)
+/docs/
