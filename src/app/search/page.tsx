@@ -746,7 +746,22 @@ function SearchPageContent() {
   const addLocation = (type: 'continent' | 'country', id: string | number, name: string, nameHe: string) => {
     const newSelection: LocationSelection = { type, id, name, nameHe };
     
-    // Check if already selected
+    // Special case: Antarctica - prevent adding as both country and continent
+    const isAntarctica = name === 'Antarctica' || name === 'אנטארקטיקה';
+    if (isAntarctica) {
+      // Check if Antarctica is already selected (as either country or continent)
+      const antarcticaExists = selectedLocations.some(s => 
+        s.name === 'Antarctica' || s.nameHe === 'אנטארקטיקה'
+      );
+      if (antarcticaExists) {
+        // Already selected, don't add again
+        setIsLocationDropdownOpen(false);
+        setLocationSearch('');
+        return;
+      }
+    }
+    
+    // Check if already selected (same type and id)
     const exists = selectedLocations.some(s => s.type === type && s.id === id);
     if (!exists) {
       setSelectedLocations([...selectedLocations, newSelection]);
@@ -915,8 +930,17 @@ function SearchPageContent() {
                 </div>
               )}
               
-              {/* Countries grouped by continent */}
-              {Object.entries(countriesByContinent).map(([continent, countriesList]) => {
+              {/* Countries grouped by continent - SORTED A-Z by continent name */}
+              {Object.entries(countriesByContinent)
+                .sort(([continentA], [continentB]) => {
+                  // Use the Hebrew names for sorting alphabetically
+                  const continentInfoA = CONTINENTS.find(c => c.value === continentA);
+                  const continentInfoB = CONTINENTS.find(c => c.value === continentB);
+                  const nameA = continentInfoA?.nameHe || continentA;
+                  const nameB = continentInfoB?.nameHe || continentB;
+                  return nameA.localeCompare(nameB, 'he');
+                })
+                .map(([continent, countriesList]) => {
                 const continentInfo = CONTINENTS.find(c => c.value === continent);
                 
                 return (
