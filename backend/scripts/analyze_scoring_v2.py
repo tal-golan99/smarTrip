@@ -1,7 +1,13 @@
 """
 Recommendation Engine Scoring Analysis v2
 Comprehensive analysis with actionable insights
+
+Run from backend folder: python scripts/analyze_scoring_v2.py
 """
+
+import sys
+import os
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from datetime import datetime
 from app import app, db_session, Trip, Country, TripType, Tag, TagCategory, TripStatus

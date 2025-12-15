@@ -1,7 +1,13 @@
 """
 Recommendation Engine Scoring Analysis
 Tests 30 different scenarios to analyze score distribution
+
+Run from backend folder: python scripts/analyze_scoring.py
 """
+
+import sys
+import os
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from datetime import datetime, timedelta
 from app import app, db_session, Trip, Country, TripType, Tag, TripTag, TagCategory, TripStatus
