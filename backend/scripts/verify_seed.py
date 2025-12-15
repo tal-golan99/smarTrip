@@ -1,4 +1,12 @@
-"""Quick verification script to check seeded data"""
+"""
+Quick verification script to check seeded data
+
+Run from backend folder: python scripts/verify_seed.py
+"""
+
+import sys
+import os
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from database import SessionLocal
 from models import Country, Guide, Tag, Trip, TagCategory

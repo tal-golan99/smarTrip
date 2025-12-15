@@ -1,6 +1,12 @@
 """
 Check how many trips have GUARANTEED status
+
+Run from backend folder: python scripts/check_guaranteed_trips.py
 """
+
+import sys
+import os
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from database import SessionLocal
 from models import Trip, TripStatus

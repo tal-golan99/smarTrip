@@ -1,6 +1,12 @@
 """
 Verify that trip type names match between frontend and backend
+
+Run from backend folder: python scripts/verify_names.py
 """
+
+import sys
+import os
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from database import SessionLocal
 from models import TripType

@@ -1,7 +1,13 @@
 """
 Verification Script for TripType Schema Refactoring
 Checks if the Type-to-Country logic is correctly applied
+
+Run from backend folder: python scripts/verify_schema.py
 """
+
+import sys
+import os
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from database import SessionLocal
 from models import Trip, TripType, Country, Tag, TagCategory

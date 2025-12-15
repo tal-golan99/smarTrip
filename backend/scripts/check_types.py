@@ -1,6 +1,12 @@
 """
 Quick script to check TripType IDs in the database
+
+Run from backend folder: python scripts/check_types.py
 """
+
+import sys
+import os
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from database import SessionLocal
 from models import TripType, Trip, Country
