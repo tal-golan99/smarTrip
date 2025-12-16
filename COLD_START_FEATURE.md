@@ -27,9 +27,9 @@ These are common when trying to connect to a sleeping Render service.
 When initially loading, users see:
 ```
 טוען אפשרויות חיפוש...
-טעינה ראשונית עשויה לקחת עד דקה בגלל השרת בענן
+טעינה ראשונית עשויה לקחת מספר רגעים...
 ```
-(Translation: "Loading search options... Initial load may take up to a minute due to cloud server")
+(Translation: "Loading search options... Initial load may take a few moments...")
 
 #### Cold Start Detected
 When a cold start is detected, instead of a scary error message, users see:

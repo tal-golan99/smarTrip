@@ -929,7 +929,7 @@ function SearchPageContent() {
           <Loader2 className="w-12 h-12 animate-spin text-[#12acbe] mx-auto mb-4" />
           <p className="text-[#5a5a5a] text-lg mb-2">טוען אפשרויות חיפוש...</p>
           <p className="text-[#7f7f7f] text-sm">
-            טעינה ראשונית עשויה לקחת עד דקה בגלל השרת בענן
+            טעינה ראשונית עשויה לקחת מספר רגעים...
           </p>
         </div>
       </div>
