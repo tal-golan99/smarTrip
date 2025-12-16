@@ -34,7 +34,7 @@ When initially loading, users see:
 #### Cold Start Detected
 When a cold start is detected, instead of a scary error message, users see:
 ```
-🔄 שרת מתעורר...
+שרת מתעורר...
 השרת שלנו היה בהשהיה והוא מתעורר כעת. זה עשוי לקחת 30-60 שניות בפעם הראשונה.
 מנסה שוב אוטומטית...
 ```
@@ -43,7 +43,7 @@ When a cold start is detected, instead of a scary error message, users see:
 #### Regular Connection Error
 For actual network issues (not cold starts), users see:
 ```
-❌ שגיאת חיבור
+שגיאת חיבור
 לא ניתן לטעון את אפשרויות החיפוש מהשרת. אנא בדוק את החיבור שלך ונסה שוב.
 ```
 (Translation: "Connection Error - Cannot load search options from server. Please check your connection and try again.")
