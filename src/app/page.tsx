@@ -13,11 +13,11 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#076839] via-[#0ba55c] to-[#12acbe] flex items-center justify-center px-4 py-8 md:p-4 relative overflow-hidden">
-      {/* Decorative background elements */}
+      {/* Decorative background elements - Optimized */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-20 left-10 w-72 h-72 bg-white/5 rounded-full blur-3xl"></div>
-        <div className="absolute bottom-20 right-10 w-96 h-96 bg-white/5 rounded-full blur-3xl"></div>
-        <Sparkles className="absolute bottom-1/3 left-1/4 w-6 h-6 text-white/10 animate-pulse" style={{ animationDelay: '1s' }} />
+        <div className="absolute top-20 left-10 w-72 h-72 bg-white/5 rounded-full blur-2xl transform-gpu"></div>
+        <div className="absolute bottom-20 right-10 w-96 h-96 bg-white/5 rounded-full blur-2xl transform-gpu"></div>
+        <Sparkles className="absolute bottom-1/3 left-1/4 w-6 h-6 text-white/10 animate-pulse transform-gpu" style={{ animationDelay: '1s' }} />
       </div>
 
       {/* Main content */}
@@ -48,7 +48,7 @@ export default function Home() {
         <div className="animate-fade-in-up px-4" style={{ animationDelay: '0.6s' }}>
           <button
             onClick={handleStartJourney}
-            className="relative inline-flex items-center justify-center px-8 py-4 md:px-12 md:py-5 bg-white text-[#076839] rounded-2xl font-bold text-lg md:text-xl lg:text-2xl shadow-2xl hover:shadow-[0_20px_60px_rgba(255,255,255,0.5)] transition-all duration-300 hover:scale-105 active:scale-95 w-full max-w-md"
+            className="relative inline-flex items-center justify-center px-8 py-4 md:px-12 md:py-5 bg-white text-[#076839] rounded-2xl font-bold text-lg md:text-xl lg:text-2xl shadow-2xl hover:shadow-[0_20px_60px_rgba(255,255,255,0.5)] transition-all duration-300 hover:scale-105 active:scale-95 w-full max-w-md transform-gpu"
           >
             בוא נגלה לאן טסים
           </button>
@@ -122,50 +122,50 @@ export default function Home() {
           <h3 className="text-lg sm:text-xl md:text-2xl font-bold text-white mb-6 md:mb-8 text-center">מצא את סגנון הטיול שלך</h3>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
             {/* Safari */}
-            <div className="group relative overflow-hidden rounded-xl md:rounded-2xl bg-gradient-to-br from-white/20 to-white/5 backdrop-blur-sm active:from-white/30 active:to-white/10 md:hover:from-white/30 md:hover:to-white/10 transition-all duration-300 md:hover:scale-105 active:scale-95 cursor-pointer flex flex-col justify-center items-center gap-2 md:gap-3 p-4 md:p-6 min-h-[100px] md:min-h-[120px]">
-              <PawPrint className="w-7 h-7 md:w-8 md:h-8 flex-shrink-0 text-white md:group-hover:scale-110 transition-transform" />
+            <div className="group relative overflow-hidden rounded-xl md:rounded-2xl bg-gradient-to-br from-white/20 to-white/5 backdrop-blur-sm active:from-white/30 active:to-white/10 md:hover:from-white/30 md:hover:to-white/10 transition-all duration-300 md:hover:scale-105 active:scale-95 cursor-pointer flex flex-col justify-center items-center gap-2 md:gap-3 p-4 md:p-6 min-h-[100px] md:min-h-[120px] transform-gpu">
+              <PawPrint className="w-7 h-7 md:w-8 md:h-8 flex-shrink-0 text-white md:group-hover:scale-110 transition-transform transform-gpu" />
               <div className="text-white font-medium text-xs md:text-sm text-center leading-tight">ספארי באפריקה</div>
             </div>
             
             {/* Geographic Depth */}
-            <div className="group relative overflow-hidden rounded-xl md:rounded-2xl bg-gradient-to-br from-white/20 to-white/5 backdrop-blur-sm active:from-white/30 active:to-white/10 md:hover:from-white/30 md:hover:to-white/10 transition-all duration-300 md:hover:scale-105 active:scale-95 cursor-pointer flex flex-col justify-center items-center gap-2 md:gap-3 p-4 md:p-6 min-h-[100px] md:min-h-[120px]">
-              <Globe className="w-7 h-7 md:w-8 md:h-8 flex-shrink-0 text-white md:group-hover:scale-110 transition-transform" />
+            <div className="group relative overflow-hidden rounded-xl md:rounded-2xl bg-gradient-to-br from-white/20 to-white/5 backdrop-blur-sm active:from-white/30 active:to-white/10 md:hover:from-white/30 md:hover:to-white/10 transition-all duration-300 md:hover:scale-105 active:scale-95 cursor-pointer flex flex-col justify-center items-center gap-2 md:gap-3 p-4 md:p-6 min-h-[100px] md:min-h-[120px] transform-gpu">
+              <Globe className="w-7 h-7 md:w-8 md:h-8 flex-shrink-0 text-white md:group-hover:scale-110 transition-transform transform-gpu" />
               <div className="text-white font-medium text-xs md:text-sm text-center leading-tight">טיולי עומק</div>
             </div>
             
             {/* Cruises */}
-            <div className="group relative overflow-hidden rounded-xl md:rounded-2xl bg-gradient-to-br from-white/20 to-white/5 backdrop-blur-sm active:from-white/30 active:to-white/10 md:hover:from-white/30 md:hover:to-white/10 transition-all duration-300 md:hover:scale-105 active:scale-95 cursor-pointer flex flex-col justify-center items-center gap-2 md:gap-3 p-4 md:p-6 min-h-[100px] md:min-h-[120px]">
-              <Ship className="w-7 h-7 md:w-8 md:h-8 flex-shrink-0 text-white md:group-hover:scale-110 transition-transform" />
+            <div className="group relative overflow-hidden rounded-xl md:rounded-2xl bg-gradient-to-br from-white/20 to-white/5 backdrop-blur-sm active:from-white/30 active:to-white/10 md:hover:from-white/30 md:hover:to-white/10 transition-all duration-300 md:hover:scale-105 active:scale-95 cursor-pointer flex flex-col justify-center items-center gap-2 md:gap-3 p-4 md:p-6 min-h-[100px] md:min-h-[120px] transform-gpu">
+              <Ship className="w-7 h-7 md:w-8 md:h-8 flex-shrink-0 text-white md:group-hover:scale-110 transition-transform transform-gpu" />
               <div className="text-white font-medium text-xs md:text-sm text-center leading-tight">שייט גיאוגרפי</div>
             </div>
             
             {/* Train Tours */}
-            <div className="group relative overflow-hidden rounded-xl md:rounded-2xl bg-gradient-to-br from-white/20 to-white/5 backdrop-blur-sm active:from-white/30 active:to-white/10 md:hover:from-white/30 md:hover:to-white/10 transition-all duration-300 md:hover:scale-105 active:scale-95 cursor-pointer flex flex-col justify-center items-center gap-2 md:gap-3 p-4 md:p-6 min-h-[100px] md:min-h-[120px]">
-              <Train className="w-7 h-7 md:w-8 md:h-8 flex-shrink-0 text-white md:group-hover:scale-110 transition-transform" />
+            <div className="group relative overflow-hidden rounded-xl md:rounded-2xl bg-gradient-to-br from-white/20 to-white/5 backdrop-blur-sm active:from-white/30 active:to-white/10 md:hover:from-white/30 md:hover:to-white/10 transition-all duration-300 md:hover:scale-105 active:scale-95 cursor-pointer flex flex-col justify-center items-center gap-2 md:gap-3 p-4 md:p-6 min-h-[100px] md:min-h-[120px] transform-gpu">
+              <Train className="w-7 h-7 md:w-8 md:h-8 flex-shrink-0 text-white md:group-hover:scale-110 transition-transform transform-gpu" />
               <div className="text-white font-medium text-xs md:text-sm text-center leading-tight">טיולי רכבות</div>
             </div>
             
             {/* Carnivals */}
-            <div className="group relative overflow-hidden rounded-xl md:rounded-2xl bg-gradient-to-br from-white/20 to-white/5 backdrop-blur-sm active:from-white/30 active:to-white/10 md:hover:from-white/30 md:hover:to-white/10 transition-all duration-300 md:hover:scale-105 active:scale-95 cursor-pointer flex flex-col justify-center items-center gap-2 md:gap-3 p-4 md:p-6 min-h-[100px] md:min-h-[120px]">
-              <Drama className="w-7 h-7 md:w-8 md:h-8 flex-shrink-0 text-white md:group-hover:scale-110 transition-transform" />
+            <div className="group relative overflow-hidden rounded-xl md:rounded-2xl bg-gradient-to-br from-white/20 to-white/5 backdrop-blur-sm active:from-white/30 active:to-white/10 md:hover:from-white/30 md:hover:to-white/10 transition-all duration-300 md:hover:scale-105 active:scale-95 cursor-pointer flex flex-col justify-center items-center gap-2 md:gap-3 p-4 md:p-6 min-h-[100px] md:min-h-[120px] transform-gpu">
+              <Drama className="w-7 h-7 md:w-8 md:h-8 flex-shrink-0 text-white md:group-hover:scale-110 transition-transform transform-gpu" />
               <div className="text-white font-medium text-xs md:text-sm text-center leading-tight">קרנבלים ופסטיבלים</div>
             </div>
             
             {/* Photography */}
-            <div className="group relative overflow-hidden rounded-xl md:rounded-2xl bg-gradient-to-br from-white/20 to-white/5 backdrop-blur-sm active:from-white/30 active:to-white/10 md:hover:from-white/30 md:hover:to-white/10 transition-all duration-300 md:hover:scale-105 active:scale-95 cursor-pointer flex flex-col justify-center items-center gap-2 md:gap-3 p-4 md:p-6 min-h-[100px] md:min-h-[120px]">
-              <Camera className="w-7 h-7 md:w-8 md:h-8 flex-shrink-0 text-white md:group-hover:scale-110 transition-transform" />
+            <div className="group relative overflow-hidden rounded-xl md:rounded-2xl bg-gradient-to-br from-white/20 to-white/5 backdrop-blur-sm active:from-white/30 active:to-white/10 md:hover:from-white/30 md:hover:to-white/10 transition-all duration-300 md:hover:scale-105 active:scale-95 cursor-pointer flex flex-col justify-center items-center gap-2 md:gap-3 p-4 md:p-6 min-h-[100px] md:min-h-[120px] transform-gpu">
+              <Camera className="w-7 h-7 md:w-8 md:h-8 flex-shrink-0 text-white md:group-hover:scale-110 transition-transform transform-gpu" />
               <div className="text-white font-medium text-xs md:text-sm text-center leading-tight">טיולי צילום</div>
             </div>
             
             {/* Nature Hiking */}
-            <div className="group relative overflow-hidden rounded-xl md:rounded-2xl bg-gradient-to-br from-white/20 to-white/5 backdrop-blur-sm active:from-white/30 active:to-white/10 md:hover:from-white/30 md:hover:to-white/10 transition-all duration-300 md:hover:scale-105 active:scale-95 cursor-pointer flex flex-col justify-center items-center gap-2 md:gap-3 p-4 md:p-6 min-h-[100px] md:min-h-[120px]">
-              <Mountain className="w-7 h-7 md:w-8 md:h-8 flex-shrink-0 text-white md:group-hover:scale-110 transition-transform" />
+            <div className="group relative overflow-hidden rounded-xl md:rounded-2xl bg-gradient-to-br from-white/20 to-white/5 backdrop-blur-sm active:from-white/30 active:to-white/10 md:hover:from-white/30 md:hover:to-white/10 transition-all duration-300 md:hover:scale-105 active:scale-95 cursor-pointer flex flex-col justify-center items-center gap-2 md:gap-3 p-4 md:p-6 min-h-[100px] md:min-h-[120px] transform-gpu">
+              <Mountain className="w-7 h-7 md:w-8 md:h-8 flex-shrink-0 text-white md:group-hover:scale-110 transition-transform transform-gpu" />
               <div className="text-white font-medium text-xs md:text-sm text-center leading-tight">הליכות בטבע</div>
             </div>
             
             {/* Private Groups */}
-            <div className="group relative overflow-hidden rounded-xl md:rounded-2xl bg-gradient-to-br from-white/20 to-white/5 backdrop-blur-sm active:from-white/30 active:to-white/10 md:hover:from-white/30 md:hover:to-white/10 transition-all duration-300 md:hover:scale-105 active:scale-95 cursor-pointer flex flex-col justify-center items-center gap-2 md:gap-3 p-4 md:p-6 min-h-[100px] md:min-h-[120px]">
-              <Users2 className="w-7 h-7 md:w-8 md:h-8 flex-shrink-0 text-white md:group-hover:scale-110 transition-transform" />
+            <div className="group relative overflow-hidden rounded-xl md:rounded-2xl bg-gradient-to-br from-white/20 to-white/5 backdrop-blur-sm active:from-white/30 active:to-white/10 md:hover:from-white/30 md:hover:to-white/10 transition-all duration-300 md:hover:scale-105 active:scale-95 cursor-pointer flex flex-col justify-center items-center gap-2 md:gap-3 p-4 md:p-6 min-h-[100px] md:min-h-[120px] transform-gpu">
+              <Users2 className="w-7 h-7 md:w-8 md:h-8 flex-shrink-0 text-white md:group-hover:scale-110 transition-transform transform-gpu" />
               <div className="text-white font-medium text-xs md:text-sm text-center leading-tight">קבוצות פרטיות</div>
             </div>
           </div>
@@ -175,7 +175,7 @@ export default function Home() {
         <div className="mt-12 md:mt-20 text-center animate-fade-in-up px-4" style={{ animationDelay: '1.6s' }}>
           <button
             onClick={handleStartJourney}
-            className="relative inline-flex items-center justify-center px-8 py-4 md:px-12 md:py-5 bg-white text-[#076839] rounded-2xl font-bold text-lg md:text-xl lg:text-2xl shadow-2xl hover:shadow-[0_20px_60px_rgba(255,255,255,0.5)] transition-all duration-300 hover:scale-105 active:scale-95 w-full max-w-md"
+            className="relative inline-flex items-center justify-center px-8 py-4 md:px-12 md:py-5 bg-white text-[#076839] rounded-2xl font-bold text-lg md:text-xl lg:text-2xl shadow-2xl hover:shadow-[0_20px_60px_rgba(255,255,255,0.5)] transition-all duration-300 hover:scale-105 active:scale-95 w-full max-w-md transform-gpu"
           >
             בוא נגלה לאן טסים
           </button>
@@ -188,7 +188,7 @@ export default function Home() {
         </div>
       </div>
 
-      {/* CSS Animations */}
+      {/* CSS Animations - Optimized for smooth scrolling */}
       <style jsx>{`
         @keyframes fade-in {
           from {
@@ -202,21 +202,29 @@ export default function Home() {
         @keyframes fade-in-up {
           from {
             opacity: 0;
-            transform: translateY(20px);
+            transform: translate3d(0, 20px, 0);
           }
           to {
             opacity: 1;
-            transform: translateY(0);
+            transform: translate3d(0, 0, 0);
           }
         }
 
         .animate-fade-in {
           animation: fade-in 0.8s ease-out forwards;
+          will-change: opacity;
         }
 
         .animate-fade-in-up {
           animation: fade-in-up 0.8s ease-out forwards;
           opacity: 0;
+          will-change: opacity, transform;
+        }
+
+        /* Remove will-change after animation completes */
+        .animate-fade-in.animation-complete,
+        .animate-fade-in-up.animation-complete {
+          will-change: auto;
         }
       `}</style>
     </div>
