@@ -545,17 +545,17 @@ function SearchResultsPageContent() {
                       </div>
                     )}
                     
-                    {/* Bottom-Left: Trip Type Badge (Same style as Status Badge) - Higher on mobile */}
+                    {/* Bottom-Left: Trip Type Badge - Fixed to bottom-left corner of card */}
                     {tripTypeNameHe && (
-                      <div className="absolute bottom-24 md:bottom-4 left-4 px-4 py-2 bg-white/20 backdrop-blur-sm rounded-full shadow-lg">
-                        <span className="text-sm font-semibold text-white">
+                      <div className="absolute bottom-3 left-3 px-3 py-1.5 md:px-4 md:py-2 bg-white/20 backdrop-blur-sm rounded-full shadow-lg">
+                        <span className="text-xs md:text-sm font-semibold text-white">
                           {tripTypeNameHe}
                         </span>
                       </div>
                     )}
                     
-                    {/* Content - Positioned Bottom-Right by default, Centers on Hover - Better mobile padding */}
-                    <div className="absolute bottom-0 right-0 p-4 pb-6 md:p-8 text-right transition-all duration-1000 ease-in-out group-hover:inset-0 group-hover:flex group-hover:flex-col group-hover:items-center group-hover:justify-center group-hover:text-center">
+                    {/* Content - Positioned Bottom-Right by default, Centers on Hover - Extra left padding to avoid badge collision */}
+                    <div className="absolute bottom-0 right-0 left-0 p-4 pb-3 pl-36 md:pl-48 md:p-8 text-right transition-all duration-1000 ease-in-out group-hover:inset-0 group-hover:flex group-hover:flex-col group-hover:items-center group-hover:justify-center group-hover:text-center group-hover:pl-0">
                       <h3 className="text-2xl md:text-3xl font-bold text-white mb-2 md:mb-3 drop-shadow-lg">
                         {title}
                       </h3>
