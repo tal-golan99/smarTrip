@@ -14,7 +14,7 @@
 
 'use client';
 
-import { useState, useEffect, useCallback, createContext, useContext, ReactNode } from 'react';
+import React, { useState, useEffect, useCallback, createContext, useContext, ReactNode } from 'react';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
 
@@ -272,10 +272,12 @@ export function DataStoreProvider({ children }: { children: ReactNode }) {
     getCountriesByContinent,
   };
 
+  const Provider = DataStoreContext.Provider;
+  
   return (
-    <DataStoreContext.Provider value={value}>
+    <Provider value={value}>
       {children}
-    </DataStoreContext.Provider>
+    </Provider>
   );
 }
 
