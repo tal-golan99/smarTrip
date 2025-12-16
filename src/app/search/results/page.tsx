@@ -1,9 +1,20 @@
 'use client';
 
-import React, { useState, useEffect, Suspense } from 'react';
+import React, { useState, useEffect, Suspense, useRef, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import Image from 'next/image';
 import { ArrowRight, Loader2, CheckCircle, AlertCircle, Clock, XCircle } from 'lucide-react';
 import clsx from 'clsx';
+
+// Phase 1: Tracking imports
+import {
+  usePageView,
+  useResultsTracking,
+  useImpressionTracking,
+  trackTripClick,
+  flushPendingEvents,
+  ClickSource,
+} from '@/lib/useTracking';
 
 // API URL from environment variable (set in Vercel)
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
@@ -132,6 +143,47 @@ const getDynamicImage = (trip: Trip): string => {
   return `https://image.pollinations.ai/prompt/beautiful%20landscape%20view%20of%20${encodeURIComponent(countryName)}%20travel%20destination?width=1200&height=600&nologo=true`;
 };
 
+// ============================================
+// TRIP RESULT CARD (Phase 1: With Impression Tracking)
+// ============================================
+
+interface TripResultCardProps {
+  tripId: number | undefined;
+  position: number;
+  score: number;
+  source: ClickSource;
+  onClick: () => void;
+  className?: string;
+  children: React.ReactNode;
+}
+
+/**
+ * Trip result card wrapper with impression tracking.
+ * Fires impression event when card is 50% visible.
+ */
+function TripResultCard({
+  tripId,
+  position,
+  score,
+  source,
+  onClick,
+  className,
+  children,
+}: TripResultCardProps) {
+  // Phase 1: Track impression when card enters viewport
+  const impressionRef = useImpressionTracking(tripId, position, score, source);
+  
+  return (
+    <div
+      ref={impressionRef}
+      onClick={onClick}
+      className={className}
+    >
+      {children}
+    </div>
+  );
+}
+
 // Helper to get trip field with both snake_case and camelCase support
 const getTripField = (trip: Trip, snakeCase: string, camelCase: string): any => {
   return (trip as any)[snakeCase] || (trip as any)[camelCase];
@@ -149,6 +201,26 @@ function SearchResultsPageContent() {
   const [showRefinementMessage, setShowRefinementMessage] = useState(false);
   const [hasRelaxedResults, setHasRelaxedResults] = useState(false);
   const [primaryCount, setPrimaryCount] = useState(0);
+  const [relaxedCount, setRelaxedCount] = useState(0);
+  const [responseTimeMs, setResponseTimeMs] = useState(0);
+  const [requestId, setRequestId] = useState<string | undefined>();
+  
+  // Phase 1: Track page view
+  usePageView('search_results');
+  
+  // Phase 1: Track results view (fires when results are loaded)
+  useResultsTracking(
+    !isLoading && results.length > 0
+      ? {
+          resultCount: results.length,
+          primaryCount,
+          relaxedCount,
+          topScore: results[0]?.match_score || null,
+          responseTimeMs,
+          recommendationRequestId: requestId,
+        }
+      : null
+  );
 
   // Scroll to top on mount and when search params change
   useEffect(() => {
@@ -191,6 +263,9 @@ function SearchResultsPageContent() {
         console.log('Fetching recommendations from:', `${API_URL}/api/recommendations`);
         console.log('Request preferences:', preferences);
 
+        // Phase 1: Track response time
+        const startTime = Date.now();
+
         const response = await fetch(`${API_URL}/api/recommendations`, {
           method: 'POST',
           headers: {
@@ -198,6 +273,10 @@ function SearchResultsPageContent() {
           },
           body: JSON.stringify(preferences),
         });
+
+        // Phase 1: Calculate response time
+        const endTime = Date.now();
+        setResponseTimeMs(endTime - startTime);
 
         console.log('Response status:', response.status, response.ok);
 
@@ -213,7 +292,13 @@ function SearchResultsPageContent() {
         setResults(data.data || []);
         setTotalTrips(data.total_trips || 0);
         setPrimaryCount(data.primary_count || data.count || 0);
+        setRelaxedCount(data.relaxed_count || 0);
         setHasRelaxedResults(data.has_relaxed_results || false);
+        
+        // Phase 1: Store request ID for event correlation
+        if (data.request_id) {
+          setRequestId(data.request_id);
+        }
         
         // Get score thresholds and refinement message flag from API
         if (data.score_thresholds) {
@@ -242,14 +327,25 @@ function SearchResultsPageContent() {
     }, 100);
   };
 
-  // Navigate to trip detail page
-  const handleTripClick = (tripId: number) => {
+  // Navigate to trip detail page with tracking
+  const handleTripClick = (
+    tripId: number,
+    position: number,
+    score: number,
+    source: ClickSource
+  ) => {
+    // Phase 1: Track click with source attribution
+    trackTripClick(tripId, position, score, source);
+    
+    // Flush events before navigation
+    flushPendingEvents();
+    
     router.push(`/trip/${tripId}`);
   };
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-white flex items-center justify-center">
+      <div className="min-h-screen bg-white flex items-center justify-center p-4">
         <div className="text-center">
           <Loader2 className="w-12 h-12 animate-spin text-[#12acbe] mx-auto mb-4" />
           <p className="text-[#5a5a5a] text-lg">מחפש את הטיולים המושלמים עבורך...</p>
@@ -376,10 +472,18 @@ function SearchResultsPageContent() {
                 const tripTypeId = getTripField(trip, 'trip_type_id', 'tripTypeId');
                 const isPrivateGroup = tripTypeId === 10;
                 
+                // Phase 1: Determine source for click attribution
+                const clickSource: ClickSource = isRelaxed ? 'relaxed_results' : 'search_results';
+                const matchScore = result?.match_score || 0;
+                
                 return (
-                  <div
+                  <TripResultCard
                     key={tripId || index}
-                    onClick={() => tripId && handleTripClick(tripId)}
+                    tripId={tripId}
+                    position={index}
+                    score={matchScore}
+                    source={clickSource}
+                    onClick={() => tripId && handleTripClick(tripId, index, matchScore, clickSource)}
                     className="group block relative h-80 rounded-xl overflow-hidden shadow-lg hover:shadow-2xl transition-all duration-500 cursor-pointer"
                   >
                     {/* Background Image */}
@@ -485,7 +589,7 @@ function SearchResultsPageContent() {
                         )}
                       </div>
                     </div>
-                  </div>
+                  </TripResultCard>
                 );
               })()}
                   </React.Fragment>
@@ -516,10 +620,21 @@ function SearchResultsPageContent() {
 
 function ResultsPageLoading() {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center">
+    <div className="min-h-screen bg-gradient-to-br from-[#076839] via-[#0ba55c] to-[#12acbe] flex items-center justify-center p-4">
       <div className="text-center">
-        <Loader2 className="w-12 h-12 text-emerald-400 animate-spin mx-auto mb-4" />
-        <p className="text-white text-lg">Loading results...</p>
+        <div className="mb-6">
+          <Image 
+            src="/images/logo/smartrip.png" 
+            alt="SmartTrip Logo" 
+            width={180} 
+            height={180} 
+            className="mx-auto"
+            priority
+          />
+        </div>
+        <Loader2 className="w-12 h-12 animate-spin text-white mx-auto mb-4" />
+        <p className="text-white text-xl font-medium mb-2">טוען תוצאות...</p>
+        <p className="text-white/80 text-sm">טעינה ראשונית עשויה לקחת מספר רגעים</p>
       </div>
     </div>
   );

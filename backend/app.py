@@ -11,7 +11,26 @@ from database import init_db, db_session
 from models import Trip, Country, Guide, Tag, TripTag, TripType, TripStatus, TagCategory
 from sqlalchemy import and_, or_
 from sqlalchemy.orm import joinedload, selectinload
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
+
+# Import recommendation logging (Phase 0)
+try:
+    from recommender.logging import get_logger, RecommendationLogger
+    from recommender.metrics import get_aggregator, MetricsAggregator
+    from recommender.evaluation import get_evaluator, ScenarioEvaluator
+    LOGGING_ENABLED = True
+except ImportError as e:
+    print(f"[WARNING] Recommender module not available: {e}")
+    LOGGING_ENABLED = False
+
+# Import event tracking (Phase 1)
+try:
+    from events.api import events_bp
+    from events.service import classify_search
+    EVENTS_ENABLED = True
+except ImportError as e:
+    print(f"[WARNING] Events module not available: {e}")
+    EVENTS_ENABLED = False
 
 # Load environment variables
 load_dotenv()
@@ -105,6 +124,13 @@ CORS(app, resources={
         "supports_credentials": True
     }
 })
+
+# Register Phase 1 Events Blueprint
+if EVENTS_ENABLED:
+    app.register_blueprint(events_bp)
+    print("[INIT] Events module registered (Phase 1)")
+else:
+    print("[INIT] Events module not available")
 
 
 # ============================================
@@ -604,6 +630,17 @@ def get_recommendations():
     Returns: Top 10 trips with match_score (0-100) and match_details
     Sorting: Primary by score (desc), Secondary by start_date (soonest first)
     """
+    # Initialize logging (Phase 0 metrics)
+    request_id = None
+    rec_logger = None
+    if LOGGING_ENABLED:
+        try:
+            rec_logger = get_logger()
+            request_id = rec_logger.generate_request_id()
+            rec_logger.start_request_timer(request_id)
+        except Exception as log_err:
+            print(f"[WARNING] Logger initialization failed: {log_err}", flush=True)
+    
     # Log incoming request for debugging (visible in Render logs)
     print(f"[RECOMMENDATIONS] Incoming request from: {request.remote_addr}", flush=True)
     print(f"[RECOMMENDATIONS] Request JSON: {request.get_json(silent=True)}", flush=True)
@@ -1342,6 +1379,31 @@ def get_recommendations():
         
         print(f"[RECOMMENDATIONS] Returning {len(top_trips)} primary + {len(relaxed_trips)} relaxed = {len(all_trips)} total. Top score: {top_score}", flush=True)
         
+        # Classify search type (Phase 1 enhancement)
+        search_type = 'exploration'
+        if EVENTS_ENABLED:
+            try:
+                search_type = classify_search(prefs)
+            except Exception:
+                pass
+        
+        # Log the request for metrics (Phase 0)
+        if LOGGING_ENABLED and rec_logger and request_id:
+            try:
+                rec_logger.log_request(
+                    request_id=request_id,
+                    preferences=prefs,
+                    results=all_trips,
+                    total_candidates=len(candidates),
+                    primary_count=len(top_trips),
+                    relaxed_count=len(relaxed_trips),
+                    session_id=request.headers.get('X-Session-ID'),
+                    algorithm_version='v1.0',
+                    search_type=search_type,  # Phase 1: exploration or focused_search
+                )
+            except Exception as log_err:
+                print(f"[WARNING] Failed to log request: {log_err}", flush=True)
+        
         return jsonify({
             'success': True,
             'count': len(all_trips),
@@ -1353,6 +1415,8 @@ def get_recommendations():
             'has_relaxed_results': has_relaxed,
             'score_thresholds': SCORE_THRESHOLDS,  # Send thresholds for color coding
             'show_refinement_message': show_refinement_message,
+            'request_id': request_id,  # Phase 1: For event correlation
+            'search_type': search_type,  # Phase 1: exploration or focused_search
             'message': f'Found {len(top_trips)} recommended trips' + (f' + {len(relaxed_trips)} expanded results' if has_relaxed else '')
         }), 200
     
@@ -1384,6 +1448,336 @@ def internal_error(error):
         'success': False,
         'error': 'Internal server error'
     }), 500
+
+
+# ============================================
+# METRICS & EVALUATION API (Phase 0)
+# ============================================
+
+@app.route('/api/metrics', methods=['GET'])
+def get_metrics():
+    """
+    Get current recommendation metrics (summary).
+    
+    Query params:
+    - days: Number of days to include (default 7)
+    
+    Returns aggregated metrics for the time period.
+    """
+    if not LOGGING_ENABLED:
+        return jsonify({
+            'success': False,
+            'error': 'Metrics module not available'
+        }), 503
+    
+    try:
+        days = request.args.get('days', default=7, type=int)
+        days = max(1, min(days, 90))  # Clamp between 1 and 90
+        
+        aggregator = get_aggregator()
+        metrics = aggregator.get_current_metrics(days=days)
+        
+        return jsonify({
+            'success': True,
+            'data': metrics
+        }), 200
+    
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@app.route('/api/metrics/daily', methods=['GET'])
+def get_daily_metrics():
+    """
+    Get daily breakdown of recommendation metrics.
+    
+    Query params:
+    - start: Start date (YYYY-MM-DD, default 7 days ago)
+    - end: End date (YYYY-MM-DD, default today)
+    
+    Returns list of daily metrics.
+    """
+    if not LOGGING_ENABLED:
+        return jsonify({
+            'success': False,
+            'error': 'Metrics module not available'
+        }), 503
+    
+    try:
+        # Parse date parameters
+        end_date = date.today()
+        start_date = end_date - timedelta(days=7)
+        
+        if request.args.get('start'):
+            try:
+                start_date = datetime.fromisoformat(request.args.get('start')).date()
+            except ValueError:
+                pass
+        
+        if request.args.get('end'):
+            try:
+                end_date = datetime.fromisoformat(request.args.get('end')).date()
+            except ValueError:
+                pass
+        
+        # Limit range to 90 days
+        if (end_date - start_date).days > 90:
+            start_date = end_date - timedelta(days=90)
+        
+        aggregator = get_aggregator()
+        metrics = aggregator.get_metrics_range(start=start_date, end=end_date)
+        
+        return jsonify({
+            'success': True,
+            'start': start_date.isoformat(),
+            'end': end_date.isoformat(),
+            'count': len(metrics),
+            'data': metrics
+        }), 200
+    
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@app.route('/api/metrics/top-searches', methods=['GET'])
+def get_top_searches():
+    """
+    Get top search patterns (continents, types, etc.)
+    
+    Query params:
+    - days: Number of days to analyze (default 7)
+    - limit: Max items per category (default 10)
+    """
+    if not LOGGING_ENABLED:
+        return jsonify({
+            'success': False,
+            'error': 'Metrics module not available'
+        }), 503
+    
+    try:
+        days = request.args.get('days', default=7, type=int)
+        limit = request.args.get('limit', default=10, type=int)
+        
+        days = max(1, min(days, 90))
+        limit = max(1, min(limit, 50))
+        
+        aggregator = get_aggregator()
+        top_searches = aggregator.get_top_searches(days=days, limit=limit)
+        
+        return jsonify({
+            'success': True,
+            'data': top_searches
+        }), 200
+    
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@app.route('/api/evaluation/run', methods=['POST'])
+def run_evaluation():
+    """
+    Run evaluation scenarios and get results.
+    
+    Input JSON:
+    {
+        "category": "core_persona",  // optional filter
+        "scenario_ids": [1, 2, 3],   // optional specific IDs
+    }
+    
+    Returns evaluation report with pass/fail status for each scenario.
+    """
+    if not LOGGING_ENABLED:
+        return jsonify({
+            'success': False,
+            'error': 'Evaluation module not available'
+        }), 503
+    
+    try:
+        data = request.get_json(silent=True) or {}
+        category = data.get('category')
+        scenario_ids = data.get('scenario_ids')
+        
+        # Validate scenario_ids
+        if scenario_ids is not None:
+            if not isinstance(scenario_ids, list):
+                scenario_ids = None
+            else:
+                scenario_ids = [int(i) for i in scenario_ids if isinstance(i, (int, str))]
+        
+        # Get base URL from request
+        base_url = request.url_root.rstrip('/')
+        
+        evaluator = get_evaluator(base_url=base_url)
+        report = evaluator.run_all_scenarios(
+            category=category,
+            scenario_ids=scenario_ids
+        )
+        
+        return jsonify(report), 200
+    
+    except Exception as e:
+        import traceback
+        print(f"[EVALUATION] Error: {traceback.format_exc()}", flush=True)
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@app.route('/api/evaluation/scenarios', methods=['GET'])
+def get_evaluation_scenarios():
+    """
+    Get available evaluation scenarios.
+    
+    Query params:
+    - category: Filter by category (optional)
+    
+    Returns list of scenarios without running them.
+    """
+    if not LOGGING_ENABLED:
+        return jsonify({
+            'success': False,
+            'error': 'Evaluation module not available'
+        }), 503
+    
+    try:
+        category = request.args.get('category')
+        
+        evaluator = get_evaluator()
+        scenarios = evaluator.load_scenarios(category=category)
+        
+        # Return simplified list (without preferences details)
+        scenario_list = []
+        for s in scenarios:
+            scenario_list.append({
+                'id': s.get('id'),
+                'name': s.get('name'),
+                'description': s.get('description'),
+                'category': s.get('category'),
+                'expected_min_results': s.get('expected_min_results'),
+            })
+        
+        return jsonify({
+            'success': True,
+            'count': len(scenario_list),
+            'data': scenario_list
+        }), 200
+    
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@app.route('/api/migration/logging', methods=['POST'])
+def run_logging_migration():
+    """
+    Run the database migration to create recommendation logging tables.
+    WARNING: This creates new tables. Safe to run multiple times.
+    """
+    try:
+        from migrations import upgrade_logging_tables
+        
+        print("[MIGRATION] Starting logging tables migration...", flush=True)
+        success = upgrade_logging_tables()
+        
+        if success:
+            return jsonify({
+                'success': True,
+                'message': 'Logging tables migration completed successfully'
+            }), 200
+        else:
+            return jsonify({
+                'success': False,
+                'error': 'Migration failed - check logs'
+            }), 500
+    
+    except ImportError:
+        # Fallback: run migration directly
+        try:
+            import sys
+            import os
+            sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'migrations'))
+            
+            from migrations import _001_add_recommendation_logging as migration
+            success = migration.upgrade()
+            
+            return jsonify({
+                'success': True,
+                'message': 'Logging tables migration completed successfully'
+            }), 200
+        except Exception as e2:
+            return jsonify({
+                'success': False,
+                'error': f'Migration not available: {str(e2)}'
+            }), 500
+    
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@app.route('/api/migration/user-tracking', methods=['POST'])
+def run_user_tracking_migration():
+    """
+    Run the Phase 1 database migration to create user tracking tables.
+    Creates: users, sessions, events, trip_interactions tables.
+    WARNING: Safe to run multiple times (checks for existing tables).
+    """
+    try:
+        from migrations import upgrade_user_tracking
+        
+        print("[MIGRATION] Starting user tracking tables migration (Phase 1)...", flush=True)
+        success = upgrade_user_tracking()
+        
+        if success:
+            return jsonify({
+                'success': True,
+                'message': 'User tracking tables migration completed successfully'
+            }), 200
+        else:
+            return jsonify({
+                'success': False,
+                'error': 'Migration failed - check logs'
+            }), 500
+    
+    except ImportError:
+        # Fallback: run migration directly
+        try:
+            import sys
+            import os
+            sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'migrations'))
+            
+            from migrations import _002_add_user_tracking as migration
+            success = migration.upgrade()
+            
+            return jsonify({
+                'success': True,
+                'message': 'User tracking tables migration completed successfully'
+            }), 200
+        except Exception as e2:
+            return jsonify({
+                'success': False,
+                'error': f'Migration not available: {str(e2)}'
+            }), 500
+    
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
 
 
 # ============================================

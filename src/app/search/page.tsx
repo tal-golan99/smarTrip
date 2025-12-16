@@ -2,13 +2,22 @@
 
 import { useState, useEffect, useMemo, useRef, useCallback, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import Image from 'next/image';
 import { 
   Search, X, ChevronDown, MapPin, Calendar, DollarSign, 
   TrendingUp, Compass, Ship, Camera, Mountain, Palmtree,
   Plane, Train, Users, Users2, Snowflake, Car, Sparkles, Globe,
-  Utensils, Landmark, TreePine, Waves, Sun, PawPrint, Loader2
+  Utensils, Landmark, TreePine, Waves, Sun, PawPrint, Loader2, Home
 } from 'lucide-react';
 import clsx from 'clsx';
+
+// Phase 1: Tracking imports
+import {
+  usePageView,
+  useFilterTracking,
+  trackSearchSubmit,
+  flushPendingEvents,
+} from '@/lib/useTracking';
 
 // API URL from environment variable
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
@@ -39,84 +48,11 @@ interface LocationSelection {
 }
 
 // ============================================
-// FALLBACK DATA (Used when API fails)
+// DATA IS FETCHED FROM BACKEND API
 // ============================================
-
-const FALLBACK_COUNTRIES: Country[] = [
-  // AFRICA
-  { id: 1, name: 'South Africa', nameHe: 'דרום אפריקה', continent: 'Africa' },
-  { id: 2, name: 'Egypt', nameHe: 'מצרים', continent: 'Africa' },
-  { id: 3, name: 'Morocco', nameHe: 'מרוקו', continent: 'Africa' },
-  { id: 4, name: 'Kenya', nameHe: 'קניה', continent: 'Africa' },
-  { id: 5, name: 'Tanzania', nameHe: 'טנזניה', continent: 'Africa' },
-  { id: 6, name: 'Namibia', nameHe: 'נמיביה', continent: 'Africa' },
-  
-  // ASIA
-  { id: 20, name: 'Japan', nameHe: 'יפן', continent: 'Asia' },
-  { id: 21, name: 'Thailand', nameHe: 'תאילנד', continent: 'Asia' },
-  { id: 22, name: 'Vietnam', nameHe: 'וייטנאם', continent: 'Asia' },
-  { id: 23, name: 'Nepal', nameHe: 'נפאל', continent: 'Asia' },
-  { id: 24, name: 'India', nameHe: 'הודו', continent: 'Asia' },
-  { id: 25, name: 'Jordan', nameHe: 'ירדן', continent: 'Asia' },
-  { id: 26, name: 'Turkey', nameHe: 'טורקיה', continent: 'Asia' },
-  
-  // EUROPE
-  { id: 40, name: 'Greece', nameHe: 'יוון', continent: 'Europe' },
-  { id: 41, name: 'Italy', nameHe: 'איטליה', continent: 'Europe' },
-  { id: 42, name: 'Spain', nameHe: 'ספרד', continent: 'Europe' },
-  { id: 43, name: 'France', nameHe: 'צרפת', continent: 'Europe' },
-  { id: 44, name: 'Iceland', nameHe: 'איסלנד', continent: 'Europe' },
-  { id: 45, name: 'Norway', nameHe: 'נורבגיה', continent: 'Europe' },
-  
-  // SOUTH AMERICA
-  { id: 60, name: 'Peru', nameHe: 'פרו', continent: 'South America' },
-  { id: 61, name: 'Argentina', nameHe: 'ארגנטינה', continent: 'South America' },
-  { id: 62, name: 'Brazil', nameHe: 'ברזיל', continent: 'South America' },
-  { id: 63, name: 'Chile', nameHe: 'צ\'ילה', continent: 'South America' },
-  
-  // NORTH & CENTRAL AMERICA
-  { id: 70, name: 'United States', nameHe: 'ארצות הברית', continent: 'North & Central America' },
-  { id: 71, name: 'Canada', nameHe: 'קנדה', continent: 'North & Central America' },
-  { id: 72, name: 'Guatemala', nameHe: 'גואטמלה', continent: 'North & Central America' },
-  { id: 73, name: 'Hawaii', nameHe: 'הוואי', continent: 'North & Central America' },
-  { id: 74, name: 'Mexico', nameHe: 'מקסיקו', continent: 'North & Central America' },
-  { id: 75, name: 'Panama', nameHe: 'פנמה', continent: 'North & Central America' },
-  { id: 76, name: 'Cuba', nameHe: 'קובה', continent: 'North & Central America' },
-  { id: 77, name: 'Costa Rica', nameHe: 'קוסטה ריקה', continent: 'North & Central America' },
-  
-  // OCEANIA
-  { id: 80, name: 'Australia', nameHe: 'אוסטרליה', continent: 'Oceania' },
-  { id: 81, name: 'New Zealand', nameHe: 'ניו זילנד', continent: 'Oceania' },
-  
-  // ANTARCTICA
-  { id: 90, name: 'Antarctica', nameHe: 'אנטארקטיקה', continent: 'Antarctica' },
-];
-
-const MOCK_TYPE_TAGS: Tag[] = [
-  { id: 1, name: 'Geographic Depth', nameHe: 'טיולי עומק גיאוגרפיים', category: 'Type' },
-  { id: 2, name: 'Carnivals & Festivals', nameHe: 'קרנבלים ופסטיבלים', category: 'Type' },
-  { id: 3, name: 'African Safari', nameHe: 'ספארי באפריקה', category: 'Type' },
-  { id: 4, name: 'Train Tours', nameHe: 'טיולי רכבות', category: 'Type' },
-  { id: 5, name: 'Geographic Cruises', nameHe: 'טיולי שייט גיאוגרפיים', category: 'Type' },
-  { id: 6, name: 'Nature Hiking', nameHe: 'טיולי הליכות בטבע', category: 'Type' },
-  { id: 8, name: 'Jeep Tours', nameHe: 'טיולי ג\'יפים', category: 'Type' },
-  { id: 9, name: 'Snowmobile Tours', nameHe: 'טיולי אופנועי שלג', category: 'Type' },
-  { id: 10, name: 'Private Groups', nameHe: 'קבוצות סגורות', category: 'Type' },
-  { id: 11, name: 'Photography', nameHe: 'טיולי צילום', category: 'Type' },
-];
-
-const MOCK_THEME_TAGS: Tag[] = [
-  { id: 2, name: 'Hanukkah & Christmas Lights', nameHe: 'טיולי אורות חנוכה וכריסמס', category: 'Theme' },
-  { id: 13, name: 'Extreme', nameHe: 'אקסטרים', category: 'Theme' },
-  { id: 14, name: 'Wildlife', nameHe: 'בעלי חיים', category: 'Theme' },
-  { id: 15, name: 'Cultural & Historical', nameHe: 'תרבות והיסטוריה', category: 'Theme' },
-  { id: 17, name: 'Food & Wine', nameHe: 'אוכל ויין', category: 'Theme' },
-  { id: 18, name: 'Beach & Island', nameHe: 'חופים ואיים', category: 'Theme' },
-  { id: 19, name: 'Mountain', nameHe: 'הרים', category: 'Theme' },
-  { id: 20, name: 'Desert', nameHe: 'מדבר', category: 'Theme' },
-  { id: 21, name: 'Arctic & Snow', nameHe: 'קרח ושלג', category: 'Theme' },
-  { id: 22, name: 'Tropical', nameHe: 'טרופי', category: 'Theme' },
-];
+// All data (countries, trip types, theme tags) is fetched from the backend API.
+// This ensures IDs always match the database and eliminates sync issues.
+// NO hardcoded fallback data - if API fails, UI shows error with retry.
 
 const CONTINENTS = [
   { value: 'Africa', nameHe: 'אפריקה' },
@@ -483,14 +419,16 @@ function SearchPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   
-  // Countries from API
-  const [countries, setCountries] = useState<Country[]>(FALLBACK_COUNTRIES);
+  // Countries from API (no hardcoded fallback - relies on backend)
+  const [countries, setCountries] = useState<Country[]>([]);
   const [isLoadingCountries, setIsLoadingCountries] = useState(true);
+  const [countriesError, setCountriesError] = useState(false);
 
-  // Trip Types and Tags from API (dynamic)
-  const [tripTypes, setTripTypes] = useState<Tag[]>(MOCK_TYPE_TAGS);
-  const [themeTags, setThemeTags] = useState<Tag[]>(MOCK_THEME_TAGS);
+  // Trip Types and Tags from API (no hardcoded fallback - relies on backend)
+  const [tripTypes, setTripTypes] = useState<Tag[]>([]);
+  const [themeTags, setThemeTags] = useState<Tag[]>([]);
   const [isLoadingTypes, setIsLoadingTypes] = useState(true);
+  const [typesError, setTypesError] = useState(false);
 
   // Location search state
   const [locationSearch, setLocationSearch] = useState('');
@@ -520,6 +458,25 @@ function SearchPageContent() {
   // Available months based on selected year
   const availableMonths = useMemo(() => getAvailableMonths(selectedYear), [selectedYear]);
   
+  // Phase 1: Track page view
+  usePageView('search');
+  
+  // Phase 1: Track filter changes/removals
+  // Create a memoized filters object to track changes
+  const currentFilters = useMemo(() => ({
+    locations: selectedLocations.map(l => l.id).join(','),
+    type: selectedType,
+    themes: selectedThemes.join(','),
+    year: selectedYear,
+    month: selectedMonth,
+    minDuration,
+    maxDuration,
+    budget: maxBudget,
+    difficulty,
+  }), [selectedLocations, selectedType, selectedThemes, selectedYear, selectedMonth, minDuration, maxDuration, maxBudget, difficulty]);
+  
+  useFilterTracking(currentFilters);
+  
   // Track if filters have been changed from defaults
   const hasActiveFilters = useMemo(() => {
     return selectedLocations.length > 0 ||
@@ -538,78 +495,99 @@ function SearchPageContent() {
     window.scrollTo({ top: 0, behavior: 'instant' });
   }, []);
 
-  // Fetch countries from API on mount
-  useEffect(() => {
-    const fetchCountries = async () => {
-      try {
-        const response = await fetch(`${API_URL}/api/locations`);
-        if (response.ok) {
-          const data = await response.json();
-          if (data.countries && data.countries.length > 0) {
-            // Map API response to our Country interface
-            const mappedCountries: Country[] = data.countries.map((c: any) => ({
-              id: c.id,
-              name: c.name,
-              nameHe: c.name_he || c.nameHe || c.name,
-              continent: c.continent
-            }));
-            setCountries(mappedCountries);
-          }
+  // Fetch countries from API - callable for retry
+  const fetchCountries = useCallback(async () => {
+    setIsLoadingCountries(true);
+    setCountriesError(false);
+    try {
+      const response = await fetch(`${API_URL}/api/locations`);
+      if (response.ok) {
+        const data = await response.json();
+        if (data.countries && data.countries.length > 0) {
+          // Map API response to our Country interface
+          const mappedCountries: Country[] = data.countries.map((c: any) => ({
+            id: c.id,
+            name: c.name,
+            nameHe: c.name_he || c.nameHe || c.name,
+            continent: c.continent
+          }));
+          setCountries(mappedCountries);
+        } else {
+          setCountriesError(true);
         }
-      } catch (error) {
-        console.log('Failed to fetch countries from API, using fallback data');
-      } finally {
-        setIsLoadingCountries(false);
+      } else {
+        setCountriesError(true);
       }
-    };
-
-    fetchCountries();
+    } catch (error) {
+      console.error('Failed to fetch countries from API:', error);
+      setCountriesError(true);
+    } finally {
+      setIsLoadingCountries(false);
+    }
   }, []);
 
-  // Fetch trip types and tags from API on mount
-  useEffect(() => {
-    const fetchTypesAndTags = async () => {
-      try {
-        // Fetch trip types
-        const typesResponse = await fetch(`${API_URL}/api/trip-types`);
-        if (typesResponse.ok) {
-          const typesData = await typesResponse.json();
-          if (typesData.data && typesData.data.length > 0) {
-            const mappedTypes: Tag[] = typesData.data.map((t: any) => ({
+  // Fetch trip types and tags from API - callable for retry
+  const fetchTypesAndTags = useCallback(async () => {
+    setIsLoadingTypes(true);
+    setTypesError(false);
+    try {
+      // Fetch trip types
+      const typesResponse = await fetch(`${API_URL}/api/trip-types`);
+      if (typesResponse.ok) {
+        const typesData = await typesResponse.json();
+        if (typesData.data && typesData.data.length > 0) {
+          const mappedTypes: Tag[] = typesData.data.map((t: any) => ({
+            id: t.id,
+            name: t.name,
+            nameHe: t.name_he || t.nameHe || t.name,
+            category: 'Type'
+          }));
+          setTripTypes(mappedTypes);
+        }
+      } else {
+        setTypesError(true);
+      }
+
+      // Fetch tags (themes)
+      const tagsResponse = await fetch(`${API_URL}/api/tags`);
+      if (tagsResponse.ok) {
+        const tagsData = await tagsResponse.json();
+        if (tagsData.success || tagsData.ok) {
+          const mappedTags: Tag[] = tagsData.data
+            .filter((t: any) => t.category?.toUpperCase() === 'THEME' || t.category === 'Theme')
+            .map((t: any) => ({
               id: t.id,
               name: t.name,
               nameHe: t.name_he || t.nameHe || t.name,
-              category: 'Type'
+              category: 'Theme'
             }));
-            setTripTypes(mappedTypes);
-          }
+          setThemeTags(mappedTags);
         }
-
-        // Fetch tags (themes)
-        const tagsResponse = await fetch(`${API_URL}/api/tags`);
-        if (tagsResponse.ok) {
-          const tagsData = await tagsResponse.json();
-          if (tagsData.ok) {
-            const mappedTags: Tag[] = tagsData.data
-              .filter((t: any) => t.category === 'THEME')
-              .map((t: any) => ({
-                id: t.id,
-                name: t.name,
-                nameHe: t.name_he || t.nameHe || t.name,
-                category: 'Theme'
-              }));
-            setThemeTags(mappedTags);
-          }
-        }
-      } catch (error) {
-        console.log('Failed to fetch types/tags from API, using fallback data');
-      } finally {
-        setIsLoadingTypes(false);
+      } else {
+        setTypesError(true);
       }
-    };
-
-    fetchTypesAndTags();
+    } catch (error) {
+      console.error('Failed to fetch types/tags from API:', error);
+      setTypesError(true);
+    } finally {
+      setIsLoadingTypes(false);
+    }
   }, []);
+
+  // Fetch data on mount
+  useEffect(() => {
+    fetchCountries();
+  }, [fetchCountries]);
+
+  useEffect(() => {
+    fetchTypesAndTags();
+  }, [fetchTypesAndTags]);
+  
+  // Retry all data
+  const retryFetchData = () => {
+    fetchCountries();
+    fetchTypesAndTags();
+  };
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -814,6 +792,37 @@ function SearchPageContent() {
     params.set('budget', maxBudget.toString());
     if (difficulty !== null) params.set('difficulty', difficulty.toString());
 
+    // Phase 1: Track search submission
+    const preferences = {
+      countries: countriesIds ? countriesIds.split(',').map(Number) : [],
+      continents: continents ? continents.split(',') : [],
+      type: selectedType,
+      themes: selectedThemes,
+      year: selectedYear,
+      month: selectedMonth,
+      minDuration,
+      maxDuration,
+      budget: maxBudget,
+      difficulty,
+    };
+    
+    // Classify search type
+    const filterCount = [
+      countriesIds, 
+      continents, 
+      selectedType, 
+      selectedThemes.length > 0,
+      selectedYear !== 'all',
+      selectedMonth !== 'all',
+      difficulty !== null
+    ].filter(Boolean).length;
+    
+    const searchType = filterCount >= 2 ? 'focused_search' : 'exploration';
+    trackSearchSubmit(preferences, searchType);
+    
+    // Flush events before navigation
+    flushPendingEvents();
+
     router.push(`/search/results?${params.toString()}`);
   };
 
@@ -833,14 +842,63 @@ function SearchPageContent() {
     setLocationSearch('');
   };
 
+  // Show loading state while data is being fetched
+  const isLoading = isLoadingCountries || isLoadingTypes;
+  const hasError = countriesError || typesError;
+  const hasData = countries.length > 0 && tripTypes.length > 0;
+
+  // If still loading initial data, show loading indicator (clean white background)
+  if (isLoading && !hasData) {
+    return (
+      <div className="min-h-screen bg-white flex items-center justify-center p-4">
+        <div className="text-center">
+          <Loader2 className="w-12 h-12 animate-spin text-[#12acbe] mx-auto mb-4" />
+          <p className="text-[#5a5a5a] text-lg">טוען אפשרויות חיפוש...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // If error fetching data and no cached data, show error with retry (clean white background)
+  if (hasError && !hasData) {
+    return (
+      <div className="min-h-screen bg-white flex items-center justify-center p-4">
+        <div className="text-center max-w-md p-8">
+          <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <X className="w-8 h-8 text-red-600" />
+          </div>
+          <h2 className="text-xl font-bold text-gray-800 mb-2">שגיאת חיבור</h2>
+          <p className="text-gray-600 mb-6">
+            לא ניתן לטעון את אפשרויות החיפוש מהשרת. אנא בדוק את החיבור שלך ונסה שוב.
+          </p>
+          <button
+            onClick={retryFetchData}
+            className="px-6 py-3 bg-[#076839] text-white rounded-xl font-medium hover:bg-[#0ba55c] transition-all"
+          >
+            נסה שוב
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-white">
       {/* Header */}
       <header className="bg-[#076839] text-white py-4 md:py-6 shadow-lg">
         <div className="container mx-auto px-4">
           <div className="flex items-center justify-between gap-4">
-            {/* Empty spacer for desktop balance */}
-            <div className="hidden md:block md:w-32"></div>
+            {/* Return to Home Button */}
+            <div className="w-16 md:w-32 flex items-center justify-start">
+              <button
+                onClick={() => router.push('/')}
+                className="flex items-center gap-2 px-3 py-2 md:px-4 md:py-2 bg-white/10 hover:bg-white/20 rounded-lg transition-all duration-200 group"
+                title="חזרה לדף הבית"
+              >
+                <Home className="w-5 h-5 md:w-6 md:h-6 group-hover:scale-110 transition-transform" />
+                <span className="hidden md:inline text-sm font-medium">דף הבית</span>
+              </button>
+            </div>
             
             {/* Title - Centered */}
             <div className="flex-1 text-center">
@@ -1225,10 +1283,21 @@ function SearchPageContent() {
 
 function SearchPageLoading() {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center">
+    <div className="min-h-screen bg-gradient-to-br from-[#076839] via-[#0ba55c] to-[#12acbe] flex items-center justify-center p-4">
       <div className="text-center">
-        <Loader2 className="w-12 h-12 text-emerald-400 animate-spin mx-auto mb-4" />
-        <p className="text-white text-lg">Loading...</p>
+        <div className="mb-6">
+          <Image 
+            src="/images/logo/smartrip.png" 
+            alt="SmartTrip Logo" 
+            width={180} 
+            height={180} 
+            className="mx-auto"
+            priority
+          />
+        </div>
+        <Loader2 className="w-12 h-12 animate-spin text-white mx-auto mb-4" />
+        <p className="text-white text-xl font-medium mb-2">טוען...</p>
+        <p className="text-white/80 text-sm">טעינה ראשונית עשויה לקחת מספר רגעים</p>
       </div>
     </div>
   );

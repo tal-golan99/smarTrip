@@ -2,8 +2,18 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
+import Image from 'next/image';
 import { ArrowRight, Calendar, Clock, DollarSign, MapPin, User, X, Loader2 } from 'lucide-react';
 import clsx from 'clsx';
+
+// Phase 1: Tracking imports
+import {
+  usePageView,
+  useTripDwellTime,
+  trackWhatsAppContact,
+  trackPhoneContact,
+  trackSaveTrip,
+} from '@/lib/useTracking';
 
 // API URL from environment variable
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
@@ -147,11 +157,18 @@ export default function TripPage() {
   const router = useRouter();
   const params = useParams();
   const tripId = params.id as string;
+  const tripIdNum = tripId ? parseInt(tripId, 10) : undefined;
   
   const [trip, setTrip] = useState<Trip | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+
+  // Phase 1: Track page view
+  usePageView('trip_detail');
+  
+  // Phase 1: Track dwell time (fires on unmount if > 2 seconds)
+  useTripDwellTime(tripIdNum);
 
   // Scroll to top on mount
   useEffect(() => {
@@ -208,7 +225,7 @@ export default function TripPage() {
   // Loading state
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-white flex items-center justify-center">
+      <div className="min-h-screen bg-white flex items-center justify-center p-4">
         <div className="text-center">
           <Loader2 className="w-12 h-12 animate-spin text-[#12acbe] mx-auto mb-4" />
           <p className="text-[#5a5a5a] text-lg">טוען פרטי טיול...</p>
