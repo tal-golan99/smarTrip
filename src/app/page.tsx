@@ -23,19 +23,19 @@ export default function Home() {
       {/* Main content */}
       <div className="text-center z-10 max-w-4xl mx-auto w-full">
         {/* Logo */}
-        <div className="mb-6 md:mb-8 animate-fade-in">
+        <div className="mb-4 md:mb-8 animate-fade-in">
           <Image 
             src="/images/logo/smartrip.png" 
             alt="SmartTrip Logo" 
             width={200} 
             height={200} 
-            className="mx-auto drop-shadow-2xl w-[150px] md:w-[200px] h-auto"
+            className="mx-auto drop-shadow-2xl w-[100px] md:w-[200px] h-auto"
             priority
           />
         </div>
 
         {/* Title */}
-        <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-bold text-white mb-4 md:mb-6 animate-fade-in-up px-2" style={{ animationDelay: '0.2s' }}>
+        <h1 className="text-5xl sm:text-6xl md:text-6xl lg:text-7xl font-bold text-white mb-4 md:mb-6 animate-fade-in-up px-2" style={{ animationDelay: '0.2s' }}>
           SmarTrip
         </h1>
 
@@ -55,23 +55,23 @@ export default function Home() {
         </div>
 
         {/* Social Proof / Trust Indicators */}
-        <div className="mt-8 md:mt-12 flex flex-col md:flex-row items-center justify-center gap-6 md:gap-8 text-white animate-fade-in-up" style={{ animationDelay: '0.8s' }}>
-          <div className="text-center">
-            <div className="text-2xl sm:text-3xl md:text-4xl font-bold mb-1">500+</div>
-            <div className="text-white/80 text-xs sm:text-sm">טיולים מאורגנים</div>
+        <div className="mt-8 md:mt-12 flex flex-row items-center justify-center gap-4 sm:gap-6 md:gap-8 text-white animate-fade-in-up px-2" style={{ animationDelay: '0.8s' }}>
+          <div className="text-center flex-1">
+            <div className="text-xl sm:text-2xl md:text-4xl font-bold mb-1">500+</div>
+            <div className="text-white/80 text-[10px] sm:text-xs md:text-sm leading-tight">טיולים מאורגנים</div>
           </div>
-          <div className="hidden md:block w-px h-12 bg-white/20"></div>
-          <div className="text-center">
-            <div className="text-2xl sm:text-3xl md:text-4xl font-bold mb-1">10,000+</div>
-            <div className="text-white/80 text-xs sm:text-sm">מטיילים מרוצים</div>
+          <div className="w-px h-10 md:h-12 bg-white/20"></div>
+          <div className="text-center flex-1">
+            <div className="text-xl sm:text-2xl md:text-4xl font-bold mb-1">10,000+</div>
+            <div className="text-white/80 text-[10px] sm:text-xs md:text-sm leading-tight">מטיילים מרוצים</div>
           </div>
-          <div className="hidden md:block w-px h-12 bg-white/20"></div>
-          <div className="text-center">
+          <div className="w-px h-10 md:h-12 bg-white/20"></div>
+          <div className="text-center flex-1">
             <div className="flex items-center justify-center gap-1 mb-1">
-              <Star className="w-5 h-5 md:w-6 md:h-6 fill-yellow-300 text-yellow-300" />
-              <span className="text-2xl sm:text-3xl md:text-4xl font-bold">4.9</span>
+              <Star className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6 fill-yellow-300 text-yellow-300" />
+              <span className="text-xl sm:text-2xl md:text-4xl font-bold">4.9</span>
             </div>
-            <div className="text-white/80 text-xs sm:text-sm">דירוג ממוצע</div>
+            <div className="text-white/80 text-[10px] sm:text-xs md:text-sm leading-tight">דירוג ממוצע</div>
           </div>
         </div>
 

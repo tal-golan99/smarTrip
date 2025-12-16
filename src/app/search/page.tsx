@@ -315,6 +315,11 @@ function DualRangeSlider({
 
   const handleMouseMove = useCallback((e: MouseEvent | TouchEvent) => {
     if (!trackRef.current) return;
+    
+    // Prevent page scrolling when dragging slider on mobile
+    if ('touches' in e) {
+      e.preventDefault();
+    }
 
     const rect = trackRef.current.getBoundingClientRect();
     const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
@@ -342,14 +347,15 @@ function DualRangeSlider({
     if (isDraggingMin || isDraggingMax) {
       document.addEventListener('mousemove', handleMouseMove);
       document.addEventListener('mouseup', handleMouseUp);
-      document.addEventListener('touchmove', handleMouseMove);
+      // Use passive: false to allow preventDefault() in touch events
+      document.addEventListener('touchmove', handleMouseMove, { passive: false });
       document.addEventListener('touchend', handleMouseUp);
     }
 
     return () => {
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handleMouseUp);
-      document.removeEventListener('touchmove', handleMouseMove);
+      document.removeEventListener('touchmove', handleMouseMove as EventListener);
       document.removeEventListener('touchend', handleMouseUp);
     };
   }, [isDraggingMin, isDraggingMax, handleMouseMove, handleMouseUp]);
@@ -382,12 +388,15 @@ function DualRangeSlider({
           ref={minThumbRef}
           className={clsx(
             'absolute w-6 h-6 bg-[#12acbe] rounded-full cursor-grab shadow-lg border-2 border-white',
-            'flex items-center justify-center transform translate-x-1/2 transition-transform',
+            'flex items-center justify-center transform translate-x-1/2 transition-transform touch-none',
             isDraggingMin && 'cursor-grabbing scale-110'
           )}
           style={{ right: `${getPercentage(minValue)}%` }}
           onMouseDown={() => setIsDraggingMin(true)}
-          onTouchStart={() => setIsDraggingMin(true)}
+          onTouchStart={(e) => {
+            e.preventDefault();
+            setIsDraggingMin(true);
+          }}
         >
           <span className="text-white text-[10px] font-bold">{minValue}</span>
         </div>
@@ -397,12 +406,15 @@ function DualRangeSlider({
           ref={maxThumbRef}
           className={clsx(
             'absolute w-6 h-6 bg-[#12acbe] rounded-full cursor-grab shadow-lg border-2 border-white',
-            'flex items-center justify-center transform translate-x-1/2 transition-transform',
+            'flex items-center justify-center transform translate-x-1/2 transition-transform touch-none',
             isDraggingMax && 'cursor-grabbing scale-110'
           )}
           style={{ right: `${getPercentage(maxValue)}%` }}
           onMouseDown={() => setIsDraggingMax(true)}
-          onTouchStart={() => setIsDraggingMax(true)}
+          onTouchStart={(e) => {
+            e.preventDefault();
+            setIsDraggingMax(true);
+          }}
         >
           <span className="text-white text-[10px] font-bold">{maxValue}</span>
         </div>
