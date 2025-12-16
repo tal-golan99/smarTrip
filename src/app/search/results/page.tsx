@@ -545,45 +545,45 @@ function SearchResultsPageContent() {
                       </div>
                     )}
                     
-                    {/* Bottom-Left: Trip Type Badge (Same style as Status Badge) */}
+                    {/* Bottom-Left: Trip Type Badge (Same style as Status Badge) - Higher on mobile */}
                     {tripTypeNameHe && (
-                      <div className="absolute bottom-4 left-4 px-4 py-2 bg-white/20 backdrop-blur-sm rounded-full shadow-lg">
+                      <div className="absolute bottom-24 md:bottom-4 left-4 px-4 py-2 bg-white/20 backdrop-blur-sm rounded-full shadow-lg">
                         <span className="text-sm font-semibold text-white">
                           {tripTypeNameHe}
                         </span>
                       </div>
                     )}
                     
-                    {/* Content - Positioned Bottom-Right by default, Centers on Hover */}
-                    <div className="absolute bottom-0 right-0 p-8 text-right transition-all duration-1000 ease-in-out group-hover:inset-0 group-hover:flex group-hover:flex-col group-hover:items-center group-hover:justify-center group-hover:text-center">
-                      <h3 className="text-3xl font-bold text-white mb-3 drop-shadow-lg">
+                    {/* Content - Positioned Bottom-Right by default, Centers on Hover - Better mobile padding */}
+                    <div className="absolute bottom-0 right-0 p-4 pb-6 md:p-8 text-right transition-all duration-1000 ease-in-out group-hover:inset-0 group-hover:flex group-hover:flex-col group-hover:items-center group-hover:justify-center group-hover:text-center">
+                      <h3 className="text-2xl md:text-3xl font-bold text-white mb-2 md:mb-3 drop-shadow-lg">
                         {title}
                       </h3>
                       
-                      <p className="text-white/90 text-base mb-3 drop-shadow-md line-clamp-2 max-w-2xl">
+                      <p className="text-white/90 text-sm md:text-base mb-2 md:mb-3 drop-shadow-md line-clamp-2 max-w-2xl">
                         {description}
                       </p>
                       
                       {/* Guide Name (Hebrew ONLY - Enhanced Styling) */}
                       {result?.guide?.name_he && (
-                        <p className="text-gray-200 text-sm mb-3 drop-shadow-lg font-medium">
+                        <p className="text-gray-200 text-xs md:text-sm mb-2 md:mb-3 drop-shadow-lg font-medium">
                           בהדרכה של: <span className="text-white font-bold">{result.guide.name_he}</span>
                         </p>
                       )}
                       
-                      <div className="text-white drop-shadow-md text-lg font-semibold" dir="ltr">
+                      <div className="text-white drop-shadow-md text-base md:text-lg font-semibold" dir="ltr">
                         {!isPrivateGroup && startDate && endDate && (
-                          <span className="whitespace-nowrap">
+                          <span className="whitespace-nowrap text-sm md:text-lg">
                             {new Date(startDate).toLocaleDateString('en-GB').replace(/\//g, '.')}
                             {' - '}
                             {new Date(endDate).toLocaleDateString('en-GB').replace(/\//g, '.')}
                           </span>
                         )}
                         {trip?.price && startDate && !isPrivateGroup && (
-                          <span className="mx-3 text-[#12acbe] text-2xl font-bold">|</span>
+                          <span className="mx-2 md:mx-3 text-[#12acbe] text-xl md:text-2xl font-bold">|</span>
                         )}
                         {trip?.price && (
-                          <span className="whitespace-nowrap">
+                          <span className="whitespace-nowrap text-sm md:text-lg">
                             ${trip.price.toLocaleString()}
                           </span>
                         )}
