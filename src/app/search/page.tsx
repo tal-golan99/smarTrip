@@ -441,6 +441,10 @@ function SearchPageContent() {
   const [themeTags, setThemeTags] = useState<Tag[]>([]);
   const [isLoadingTypes, setIsLoadingTypes] = useState(true);
   const [typesError, setTypesError] = useState(false);
+  
+  // Cold start detection
+  const [isColdStart, setIsColdStart] = useState(false);
+  const [retryAttempt, setRetryAttempt] = useState(0);
 
   // Location search state
   const [locationSearch, setLocationSearch] = useState('');
@@ -507,12 +511,33 @@ function SearchPageContent() {
     window.scrollTo({ top: 0, behavior: 'instant' });
   }, []);
 
+  // Helper to detect cold start errors
+  const detectColdStart = (error: any): boolean => {
+    const errorMessage = error?.message?.toLowerCase() || '';
+    const errorName = error?.name?.toLowerCase() || '';
+    
+    return (
+      errorMessage.includes('failed to fetch') ||
+      errorMessage.includes('networkerror') ||
+      errorMessage.includes('timeout') ||
+      errorMessage.includes('econnrefused') ||
+      errorName === 'typeerror'
+    );
+  };
+
   // Fetch countries from API - callable for retry
   const fetchCountries = useCallback(async () => {
     setIsLoadingCountries(true);
     setCountriesError(false);
     try {
-      const response = await fetch(`${API_URL}/api/locations`);
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 60000); // 60s timeout for cold starts
+      
+      const response = await fetch(`${API_URL}/api/locations`, {
+        signal: controller.signal
+      });
+      clearTimeout(timeoutId);
+      
       if (response.ok) {
         const data = await response.json();
         if (data.countries && data.countries.length > 0) {
@@ -524,6 +549,8 @@ function SearchPageContent() {
             continent: c.continent
           }));
           setCountries(mappedCountries);
+          setIsColdStart(false); // Clear cold start flag on success
+          setRetryAttempt(0);
         } else {
           setCountriesError(true);
         }
@@ -532,19 +559,43 @@ function SearchPageContent() {
       }
     } catch (error) {
       console.error('Failed to fetch countries from API:', error);
-      setCountriesError(true);
+      
+      // Detect if this is likely a cold start
+      if (detectColdStart(error)) {
+        setIsColdStart(true);
+        setCountriesError(true);
+        
+        // Auto-retry once after 8 seconds for cold starts
+        if (retryAttempt === 0) {
+          console.log('[SearchPage] Cold start detected, auto-retrying in 8s...');
+          setRetryAttempt(1);
+          setTimeout(() => {
+            fetchCountries();
+            fetchTypesAndTags();
+          }, 8000);
+        }
+      } else {
+        setCountriesError(true);
+      }
     } finally {
       setIsLoadingCountries(false);
     }
-  }, []);
+  }, [retryAttempt]);
 
   // Fetch trip types and tags from API - callable for retry
   const fetchTypesAndTags = useCallback(async () => {
     setIsLoadingTypes(true);
     setTypesError(false);
     try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 60000); // 60s timeout
+      
       // Fetch trip types
-      const typesResponse = await fetch(`${API_URL}/api/trip-types`);
+      const typesResponse = await fetch(`${API_URL}/api/trip-types`, {
+        signal: controller.signal
+      });
+      clearTimeout(timeoutId);
+      
       if (typesResponse.ok) {
         const typesData = await typesResponse.json();
         if (typesData.data && typesData.data.length > 0) {
@@ -560,8 +611,13 @@ function SearchPageContent() {
         setTypesError(true);
       }
 
+      const timeoutId2 = setTimeout(() => controller.abort(), 60000);
       // Fetch tags (themes)
-      const tagsResponse = await fetch(`${API_URL}/api/tags`);
+      const tagsResponse = await fetch(`${API_URL}/api/tags`, {
+        signal: controller.signal
+      });
+      clearTimeout(timeoutId2);
+      
       if (tagsResponse.ok) {
         const tagsData = await tagsResponse.json();
         if (tagsData.success || tagsData.ok) {
@@ -574,17 +630,23 @@ function SearchPageContent() {
               category: 'Theme'
             }));
           setThemeTags(mappedTags);
+          setIsColdStart(false); // Clear cold start on success
+          setRetryAttempt(0);
         }
       } else {
         setTypesError(true);
       }
     } catch (error) {
       console.error('Failed to fetch types/tags from API:', error);
+      
+      if (detectColdStart(error)) {
+        setIsColdStart(true);
+      }
       setTypesError(true);
     } finally {
       setIsLoadingTypes(false);
     }
-  }, []);
+  }, [retryAttempt]);
 
   // Fetch data on mount
   useEffect(() => {
@@ -863,9 +925,12 @@ function SearchPageContent() {
   if (isLoading && !hasData) {
     return (
       <div className="min-h-screen bg-white flex items-center justify-center p-4">
-        <div className="text-center">
+        <div className="text-center max-w-md">
           <Loader2 className="w-12 h-12 animate-spin text-[#12acbe] mx-auto mb-4" />
-          <p className="text-[#5a5a5a] text-lg">טוען אפשרויות חיפוש...</p>
+          <p className="text-[#5a5a5a] text-lg mb-2">טוען אפשרויות חיפוש...</p>
+          <p className="text-[#7f7f7f] text-sm">
+            טעינה ראשונית עשויה לקחת עד דקה בגלל השרת בענן
+          </p>
         </div>
       </div>
     );
@@ -876,18 +941,35 @@ function SearchPageContent() {
     return (
       <div className="min-h-screen bg-white flex items-center justify-center p-4">
         <div className="text-center max-w-md p-8">
-          <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <X className="w-8 h-8 text-red-600" />
+          <div className={`w-16 h-16 ${isColdStart ? 'bg-orange-100' : 'bg-red-100'} rounded-full flex items-center justify-center mx-auto mb-4`}>
+            {isColdStart ? (
+              <Loader2 className="w-8 h-8 text-orange-600 animate-spin" />
+            ) : (
+              <X className="w-8 h-8 text-red-600" />
+            )}
           </div>
-          <h2 className="text-xl font-bold text-gray-800 mb-2">שגיאת חיבור</h2>
+          <h2 className="text-xl font-bold text-gray-800 mb-2">
+            {isColdStart ? 'שרת מתעורר...' : 'שגיאת חיבור'}
+          </h2>
           <p className="text-gray-600 mb-6">
-            לא ניתן לטעון את אפשרויות החיפוש מהשרת. אנא בדוק את החיבור שלך ונסה שוב.
+            {isColdStart ? (
+              <>
+                השרת שלנו היה בהשהיה והוא מתעורר כעת. זה עשוי לקחת 30-60 שניות בפעם הראשונה.
+                {retryAttempt > 0 && (
+                  <span className="block mt-2 text-sm text-orange-600 font-medium">
+                    מנסה שוב אוטומטית...
+                  </span>
+                )}
+              </>
+            ) : (
+              'לא ניתן לטעון את אפשרויות החיפוש מהשרת. אנא בדוק את החיבור שלך ונסה שוב.'
+            )}
           </p>
           <button
             onClick={retryFetchData}
-            className="px-6 py-3 bg-[#076839] text-white rounded-xl font-medium hover:bg-[#0ba55c] transition-all"
+            className={`px-6 py-3 ${isColdStart ? 'bg-orange-600 hover:bg-orange-700' : 'bg-[#076839] hover:bg-[#0ba55c]'} text-white rounded-xl font-medium transition-all`}
           >
-            נסה שוב
+            נסה שוב עכשיו
           </button>
         </div>
       </div>

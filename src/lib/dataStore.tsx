@@ -59,6 +59,10 @@ interface DataStoreState {
   tripTypesError: string | null;
   themeTagsError: string | null;
   
+  // Cold start detection
+  isColdStart: boolean;
+  retryCount: number;
+  
   // Computed
   isLoading: boolean;
   hasError: boolean;
@@ -102,6 +106,25 @@ export function DataStoreProvider({ children }: { children: ReactNode }) {
   const [countriesError, setCountriesError] = useState<string | null>(null);
   const [tripTypesError, setTripTypesError] = useState<string | null>(null);
   const [themeTagsError, setThemeTagsError] = useState<string | null>(null);
+  
+  const [isColdStart, setIsColdStart] = useState(false);
+  const [retryCount, setRetryCount] = useState(0);
+
+  // Helper function to detect cold start errors
+  const detectColdStart = (error: any): boolean => {
+    const errorMessage = error?.message?.toLowerCase() || '';
+    const errorName = error?.name?.toLowerCase() || '';
+    
+    // Common cold start indicators
+    return (
+      errorMessage.includes('failed to fetch') ||
+      errorMessage.includes('networkerror') ||
+      errorMessage.includes('timeout') ||
+      errorMessage.includes('econnrefused') ||
+      errorName === 'typeerror' ||
+      error?.code === 'ECONNREFUSED'
+    );
+  };
 
   // ----------------------------------------
   // Fetch Functions
@@ -112,7 +135,14 @@ export function DataStoreProvider({ children }: { children: ReactNode }) {
     setCountriesError(null);
     
     try {
-      const response = await fetch(`${API_URL}/api/locations`);
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 second timeout for cold starts
+      
+      const response = await fetch(`${API_URL}/api/locations`, {
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+      
       if (!response.ok) throw new Error('Failed to fetch countries');
       
       const data = await response.json();
@@ -124,23 +154,48 @@ export function DataStoreProvider({ children }: { children: ReactNode }) {
           continent: c.continent,
         }));
         setCountries(mapped);
+        setIsColdStart(false); // Success, clear cold start flag
+        setRetryCount(0);
       } else {
         throw new Error(data.error || 'Invalid response');
       }
     } catch (error) {
       console.error('[DataStore] Countries fetch error:', error);
-      setCountriesError(error instanceof Error ? error.message : 'Failed to load countries');
+      
+      // Detect if this is a cold start issue
+      if (detectColdStart(error)) {
+        setIsColdStart(true);
+        setCountriesError('cold_start');
+        
+        // Auto-retry once after 5 seconds for cold starts
+        if (retryCount === 0) {
+          setRetryCount(1);
+          setTimeout(() => {
+            console.log('[DataStore] Auto-retrying after cold start detection...');
+            refreshCountries();
+          }, 5000);
+        }
+      } else {
+        setCountriesError(error instanceof Error ? error.message : 'Failed to load countries');
+      }
     } finally {
       setIsLoadingCountries(false);
     }
-  }, []);
+  }, [retryCount]);
 
   const refreshTripTypes = useCallback(async () => {
     setIsLoadingTripTypes(true);
     setTripTypesError(null);
     
     try {
-      const response = await fetch(`${API_URL}/api/trip-types`);
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 60000);
+      
+      const response = await fetch(`${API_URL}/api/trip-types`, {
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+      
       if (!response.ok) throw new Error('Failed to fetch trip types');
       
       const data = await response.json();
@@ -152,23 +207,38 @@ export function DataStoreProvider({ children }: { children: ReactNode }) {
           description: t.description,
         }));
         setTripTypes(mapped);
+        setIsColdStart(false);
+        setRetryCount(0);
       } else {
         throw new Error(data.error || 'Invalid response');
       }
     } catch (error) {
       console.error('[DataStore] Trip types fetch error:', error);
-      setTripTypesError(error instanceof Error ? error.message : 'Failed to load trip types');
+      
+      if (detectColdStart(error)) {
+        setIsColdStart(true);
+        setTripTypesError('cold_start');
+      } else {
+        setTripTypesError(error instanceof Error ? error.message : 'Failed to load trip types');
+      }
     } finally {
       setIsLoadingTripTypes(false);
     }
-  }, []);
+  }, [retryCount]);
 
   const refreshThemeTags = useCallback(async () => {
     setIsLoadingThemeTags(true);
     setThemeTagsError(null);
     
     try {
-      const response = await fetch(`${API_URL}/api/tags`);
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 60000);
+      
+      const response = await fetch(`${API_URL}/api/tags`, {
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+      
       if (!response.ok) throw new Error('Failed to fetch tags');
       
       const data = await response.json();
@@ -183,16 +253,24 @@ export function DataStoreProvider({ children }: { children: ReactNode }) {
             category: t.category,
           }));
         setThemeTags(mapped);
+        setIsColdStart(false);
+        setRetryCount(0);
       } else {
         throw new Error(data.error || 'Invalid response');
       }
     } catch (error) {
       console.error('[DataStore] Theme tags fetch error:', error);
-      setThemeTagsError(error instanceof Error ? error.message : 'Failed to load theme tags');
+      
+      if (detectColdStart(error)) {
+        setIsColdStart(true);
+        setThemeTagsError('cold_start');
+      } else {
+        setThemeTagsError(error instanceof Error ? error.message : 'Failed to load theme tags');
+      }
     } finally {
       setIsLoadingThemeTags(false);
     }
-  }, []);
+  }, [retryCount]);
 
   const refreshAll = useCallback(async () => {
     await Promise.all([
@@ -258,6 +336,10 @@ export function DataStoreProvider({ children }: { children: ReactNode }) {
     tripTypesError,
     themeTagsError,
     hasError,
+    
+    // Cold start detection
+    isColdStart,
+    retryCount,
     
     // Actions
     refreshCountries,
