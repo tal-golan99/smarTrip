@@ -1,518 +1,348 @@
-# SmartTrip - Trip Recommendation System
+# SmartTrip
 
-A production-ready travel recommendation platform with intelligent matching algorithms, built with Next.js and Flask. The system processes 587+ trips across 105+ countries using a two-tier scoring algorithm to deliver personalized recommendations.
+> An intelligent trip recommendation platform that matches travelers with personalized travel experiences using a transparent, rule-based scoring algorithm.
 
-## Overview
+[![Next.js](https://img.shields.io/badge/Next.js-14-black?logo=next.js)](https://nextjs.org/)
+[![React](https://img.shields.io/badge/React-18-61DAFB?logo=react)](https://react.dev/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![Tailwind CSS](https://img.shields.io/badge/Tailwind-3.4-06B6D4?logo=tailwindcss&logoColor=white)](https://tailwindcss.com/)
+[![Flask](https://img.shields.io/badge/Flask-3.0-000000?logo=flask)](https://flask.palletsprojects.com/)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-12+-4169E1?logo=postgresql&logoColor=white)](https://www.postgresql.org/)
+[![SQLAlchemy](https://img.shields.io/badge/SQLAlchemy-2.0-D71F00)](https://www.sqlalchemy.org/)
+[![Python](https://img.shields.io/badge/Python-3.10+-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 
-SmartTrip is a full-stack web application that provides intelligent trip recommendations based on user preferences. The platform uses weighted scoring algorithms to match trips against multiple criteria including geography, budget, duration, difficulty, and themes.
+---
 
-### Development
+## Key Features
 
-This project was developed using Cursor AI to accelerate development while maintaining enterprise-level code quality and comprehensive test coverage.
+- **Explainable Recommendations** - Every trip includes a match score (0-100) and human-readable explanations for why it was recommended
+- **Two-Tier Search Algorithm** - Primary tier applies strict filters; relaxed tier automatically expands criteria when results are sparse
+- **Bilingual Support** - Full Hebrew and English content with RTL layout support
+- **Event Analytics** - Built-in tracking for search behavior, impressions, and user interactions
 
-## Technical Stack
+---
 
-### Frontend
-- Next.js 14 (App Router)
-- React 18
-- TypeScript 5.x
-- Tailwind CSS 3.4
-- Lucide React (Icons)
+## Architecture
 
-### Backend
-- Flask 3.x (Python 3.10+)
-- SQLAlchemy 2.x (ORM)
-- PostgreSQL 12+
-- RESTful API
+```mermaid
+flowchart TB
+    subgraph Client["Browser"]
+        UI["Next.js 14 App Router"]
+    end
 
-### Testing
-- Custom Python test suite
-- 255 automated tests
-- 99.2% pass rate
+    subgraph Vercel["Vercel"]
+        FE["Frontend<br/>React 18 + TypeScript"]
+    end
 
-## Core Features
+    subgraph Render["Render"]
+        BE["Flask API<br/>Python 3.10+"]
+        SCHED["APScheduler<br/>Background Jobs"]
+    end
 
-### Two-Tier Recommendation Algorithm
+    subgraph Database["PostgreSQL"]
+        DB[(SmartTrip Database)]
+    end
 
-**Primary Tier**
-- Strict filtering based on user preferences
-- Base score of 25 points
-- Weighted scoring across 6 criteria
-- Returns top 10 matches
+    UI --> FE
+    FE -->|"REST API"| BE
+    BE --> DB
+    SCHED --> DB
 
-**Relaxed Tier**
-- Activated when primary results < 6 trips
-- Expands geographic scope to continent level
-- Extends date range by 2 months
-- Applies penalty scoring for flexibility
-
-### Search Capabilities
-- Geographic filtering (continent, country)
-- Trip type selection
-- Multi-theme preferences (up to 3)
-- Date filtering (year/month)
-- Budget constraints
-- Difficulty levels (1-5 scale)
-- Duration ranges
-
-### Security
-- Input validation and sanitization
-- XSS protection
-- SQL injection prevention
-- Type safety enforcement
-- Boundary condition handling
-
-### Internationalization
-- Full Hebrew and English support
-- RTL layout implementation
-- Bilingual content across all entities
-
-## Installation
-
-### Prerequisites
-
-- Node.js 18 or higher
-- Python 3.10 or higher
-- PostgreSQL 12 or higher
-- pip (latest version)
-- npm 9 or higher
-
-### Database Setup
-
-Create a PostgreSQL database:
-
-```sql
-CREATE DATABASE smarttrip;
+    style Client fill:#f5f5f5,stroke:#333
+    style Vercel fill:#000,stroke:#333,color:#fff
+    style Render fill:#46E3B7,stroke:#333
+    style Database fill:#336791,stroke:#333,color:#fff
 ```
 
-### Backend Installation
+---
+
+## Tech Stack
+
+### Frontend
+| Technology | Purpose |
+|------------|---------|
+| Next.js 14 | React framework with App Router |
+| React 18 | UI library |
+| TypeScript 5 | Type safety |
+| Tailwind CSS 3.4 | Utility-first styling |
+| Lucide React | Icon library |
+
+### Backend
+| Technology | Purpose |
+|------------|---------|
+| Flask 3.0 | Python web framework |
+| SQLAlchemy 2.0 | ORM and database toolkit |
+| PostgreSQL 12+ | Relational database |
+| APScheduler | Background job scheduling |
+| Gunicorn | Production WSGI server |
+
+---
+
+## Prerequisites
+
+- **Node.js** 18+
+- **Python** 3.10+
+- **PostgreSQL** 12+
+- **npm** 9+ or **yarn**
+
+---
+
+## Installation & Setup
+
+### 1. Clone the Repository
+
+```bash
+git clone https://github.com/your-username/trip-recommendations.git
+cd trip-recommendations
+```
+
+### 2. Backend Setup
 
 ```bash
 cd backend
 
-# Create virtual environment
-python -m venv venv
+# Create and activate virtual environment
+python -m venv .venv
 
-# Activate virtual environment
-# Windows:
-venv\Scripts\activate
-# Mac/Linux:
-source venv/bin/activate
+# Windows
+.venv\Scripts\activate
+
+# macOS/Linux
+source .venv/bin/activate
 
 # Install dependencies
 pip install -r requirements.txt
-
-# Configure environment variables
-# Create backend/.env with the following:
-FLASK_APP=app.py
-FLASK_ENV=development
-SECRET_KEY=your-secret-key-here
-DATABASE_URL=postgresql://postgres:PASSWORD@localhost:5432/smarttrip
-PORT=5000
-HOST=0.0.0.0
-FRONTEND_URL=http://localhost:3000
-
-# Initialize database
-python seed.py
-
-# Start backend server
-python app.py
 ```
 
-Backend will be available at http://localhost:5000
+Create `backend/.env`:
 
-### Frontend Installation
+```env
+FLASK_APP=app.py
+FLASK_ENV=development
+SECRET_KEY=your-secret-key
+DATABASE_URL=postgresql://user:password@localhost:5432/smarttrip
+ALLOWED_ORIGINS=http://localhost:3000
+```
+
+Initialize database and start:
+
+```bash
+python scripts/seed.py    # Seed initial data
+python app.py             # Start dev server on :5000
+```
+
+### 3. Frontend Setup
 
 ```bash
 # From project root
 npm install
+```
 
-# Configure environment variables
-# Create .env.local with:
+Create `.env.local`:
+
+```env
 NEXT_PUBLIC_API_URL=http://localhost:5000
-
-# Start development server
-npm run dev
 ```
 
-Frontend will be available at http://localhost:3000
+Start development server:
 
-## Project Structure
-
-```
-trip-recommendations/
-├── src/
-│   ├── app/
-│   │   ├── search/              # Search interface
-│   │   │   ├── page.tsx         # Search form
-│   │   │   └── results/         # Results display
-│   │   ├── trip/[id]/           # Trip details
-│   │   ├── layout.tsx           # Root layout
-│   │   └── page.tsx             # Home page
-│   └── lib/
-│       └── api.ts               # API client
-├── backend/
-│   ├── app.py                   # Flask application
-│   ├── models.py                # Database models
-│   ├── database.py              # Database configuration
-│   ├── seed.py                  # Database seeding
-│   ├── requirements.txt         # Python dependencies
-│   └── tests/                   # Test suite
-│       ├── test_api_endpoints.py
-│       ├── test_search_scenarios.py
-│       └── run_all_tests.py
-├── public/                      # Static assets
-├── .env.local                   # Frontend environment
-├── backend/.env                 # Backend environment
-└── README.md
+```bash
+npm run dev    # Starts on :3000
 ```
 
-## API Documentation
+---
 
-### Base URL
+## Usage
 
-Development: http://localhost:5000
-Production: Configure via environment variables
+### Development
 
-### Endpoints
+```bash
+# Frontend
+npm run dev          # Start Next.js dev server
+npm run lint         # Run ESLint
 
-#### Health Check
-```
-GET /api/health
-```
-
-Returns system status and database statistics.
-
-#### Countries
-```
-GET /api/countries
-GET /api/countries?continent=Asia
+# Backend
+python app.py        # Start Flask dev server
+python -m pytest     # Run test suite
 ```
 
-Returns list of available countries with continent mapping.
+### Production Build
 
-#### Trips
-```
-GET /api/trips
-GET /api/trips/:id
+```bash
+# Frontend
+npm run build
+npm run start
+
+# Backend (via Gunicorn)
+gunicorn app:app
 ```
 
-Query parameters:
-- limit: Results per page (default: 50, max: 1000)
-- offset: Starting position (default: 0)
-- country_id: Filter by country
-- guide_id: Filter by guide
-- tag_id: Filter by tag
-- status: Filter by status
-- difficulty: Filter by difficulty level
-- start_date: Filter trips after date
-- end_date: Filter trips before date
+---
 
-#### Recommendations
-```
+## API Reference
+
+Base URL: `http://localhost:5000/api`
+
+### Core Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/health` | Health check with DB stats |
+
+### Trip Resources
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/trips` | List all trips |
+| `GET` | `/trips/:id` | Get trip by ID |
+| `GET` | `/countries` | List all countries |
+| `GET` | `/trip-types` | List trip categories |
+| `GET` | `/tags` | List theme tags |
+| `GET` | `/guides` | List tour guides |
+
+### Recommendations
+
+```http
 POST /api/recommendations
 Content-Type: application/json
 ```
 
-Request body:
+**Request Body:**
+
 ```json
 {
-  "selected_countries": [1, 5, 10],
+  "selected_countries": [1, 5],
   "selected_continents": ["Asia", "Europe"],
-  "preferred_type_id": 5,
-  "preferred_theme_ids": [3, 7, 10],
+  "preferred_type_id": 3,
+  "preferred_theme_ids": [10, 15],
+  "budget": 12000,
   "min_duration": 7,
   "max_duration": 14,
-  "budget": 10000,
   "difficulty": 2,
   "year": "2026",
   "month": "3"
 }
 ```
 
-All parameters are optional.
+**Response:**
 
-Response:
 ```json
 {
   "success": true,
   "count": 10,
-  "primary_count": 6,
-  "relaxed_count": 4,
-  "total_candidates": 45,
-  "total_trips": 587,
-  "has_relaxed_results": true,
-  "score_thresholds": {
-    "HIGH": 70,
-    "MID": 50
-  },
+  "primary_count": 7,
+  "relaxed_count": 3,
+  "score_thresholds": { "HIGH": 70, "MID": 50 },
   "data": [
     {
-      "match_score": 87,
-      "is_relaxed": false,
-      "match_details": ["Theme Match [+25]", "Perfect Difficulty [+15]"],
-      "trip": { /* trip object */ }
+      "id": 517,
+      "title": "Japan Cultural Discovery",
+      "match_score": 88,
+      "match_details": [
+        "Excellent Theme Match [+25]",
+        "Perfect Difficulty [+15]",
+        "Country Match [+15]"
+      ],
+      "is_relaxed": false
     }
   ]
 }
 ```
 
-#### Tags
-```
-GET /api/tags
-```
-
-Returns available trip types and themes for filtering.
-
-#### Trip Types
-```
-GET /api/trip-types
-```
-
-Returns all trip type categories.
-
-#### Guides
-```
-GET /api/guides
-```
-
-Returns all tour guide profiles.
+---
 
 ## Recommendation Algorithm
 
-### Scoring System
+The scoring engine uses weighted signals to rank trips:
 
-The algorithm uses a weighted point system with a base score of 25 points. Trips are evaluated across multiple criteria and can achieve a maximum score of 100 (scores are clamped).
+| Signal | Points | Condition |
+|--------|--------|-----------|
+| Base Score | +35 | Passes hard filters |
+| Theme Match (2+) | +25 | Multiple theme overlap |
+| Theme Match (1) | +12 | Single theme overlap |
+| Theme Penalty | -15 | No theme overlap |
+| Difficulty | +15 | Exact match |
+| Duration | +12 / +8 | Ideal / Good fit |
+| Budget | +12 / +8 / +5 | Perfect / Good / Acceptable |
+| Geography | +15 / +5 | Country / Continent match |
+| Status Bonus | +15 / +7 | Last Places / Guaranteed |
+| Departing Soon | +7 | Within 30 days |
 
-**Scoring Weights:**
+Scores are clamped to 0-100. When primary results are fewer than 6, relaxed search expands filters with a -20 base penalty.
 
-| Criterion | Weight | Condition |
-|-----------|--------|-----------|
-| Base Score | 25 | All trips |
-| Theme Match (Full) | +25 | 2+ matching themes |
-| Theme Match (Partial) | +12 | 1 matching theme |
-| Theme Penalty | -15 | No matching themes |
-| Difficulty Match | +15 | Exact difficulty level |
-| Duration (Ideal) | +12 | Within specified range |
-| Duration (Good) | +8 | Within 4 days of range |
-| Budget (Perfect) | +12 | Within budget |
-| Budget (Good) | +8 | Within 10% over budget |
-| Budget (Acceptable) | +5 | Within 30% over budget |
-| Status (Guaranteed) | +7 | Guaranteed departure |
-| Status (Last Places) | +15 | Limited availability |
-| Departing Soon | +7 | Within 60 days |
-| Geography (Direct) | +15 | Direct country match |
-| Geography (Continent) | +5 | Continent match |
+---
 
-**Score Ranges:**
+## Project Structure
 
-- 70-100: High match (Turquoise indicator)
-- 50-69: Medium match (Orange indicator)
-- 0-49: Low match (Red indicator)
-
-### Filtering Logic
-
-**Primary Tier (Strict):**
-- Geography: Selected countries or continents
-- Dates: Exact year and month match
-- Status: Available spots only
-- Duration: Within 7 days of preference
-- Difficulty: Within 1 level
-
-**Relaxed Tier (Flexible):**
-- Geography: Expands to full continent
-- Dates: 2 months before and after selection
-- Duration: Within 10 days of preference
-- Difficulty: Within 2 levels
-- Budget: Up to 50% over (vs 30% in primary)
-- Trip Type: All types (with -10 penalty)
-- Base Penalty: -20 points
-
-The relaxed tier activates automatically when primary results return fewer than 6 trips.
-
-## Testing
-
-### Running Tests
-
-```bash
-cd backend
-
-# Run all tests
-python tests/run_all_tests.py
-
-# Run API endpoint tests
-python tests/test_api_endpoints.py
-
-# Run search scenario tests
-python tests/test_search_scenarios.py
+```
+trip-recommendations/
++-- src/
+|   +-- app/                    # Next.js App Router pages
+|   |   +-- search/             # Search UI
+|   |   +-- trip/[id]/          # Trip detail page
+|   +-- lib/
+|       +-- api.ts              # API client
++-- backend/
+|   +-- app.py                  # Flask application + scoring config
+|   +-- models.py               # SQLAlchemy ORM models
+|   +-- database.py             # DB session management
+|   +-- scripts/                # Seeding, evaluation, analytics
+|   +-- events/                 # Event tracking module
+|   +-- scheduler.py            # Background jobs
++-- tests/
+|   +-- backend/                # API and algorithm tests
+|   +-- integration/            # End-to-end scenarios
+|   +-- e2e/                    # Playwright UI tests
++-- docs/                       # Technical documentation
++-- render.yaml                 # Render deployment config
 ```
 
-### Test Coverage
-
-- API Endpoint Tests: 40 tests
-- Search Scenarios: 215 tests
-- Total: 255 tests
-- Pass Rate: 99.2%
-
-Test categories include:
-- Health checks
-- CRUD operations
-- Recommendations algorithm
-- Input validation
-- Boundary conditions
-- Security (XSS, SQL injection)
-- Error handling
-- Performance benchmarks
-
-## Database Schema
-
-### Tables
-
-**countries**
-- 105+ destinations with continent mapping
-- Bilingual names (English/Hebrew)
-
-**guides**
-- Tour guide profiles
-- Contact information and specializations
-- Bilingual biographies
-
-**tags**
-- Trip categorization
-- Categories: Type and Theme
-
-**trip_types**
-- Trip style definitions (Safari, Train Tours, Cruise, etc.)
-
-**trips**
-- Core trip data with pricing and dates
-- Difficulty levels (1-5)
-- Status tracking (Open, Guaranteed, Last Places, Full, Cancelled)
-- Foreign keys: country_id, guide_id, trip_type_id
-
-**trip_tags**
-- Many-to-many relationship between trips and tags
-
-### Indexes
-
-Performance indexes are applied on:
-- trips.start_date
-- trips.country_id
-- trips.trip_type_id
-- trips.status
-- trip_tags.trip_id
-- trip_tags.tag_id
+---
 
 ## Deployment
 
-### Environment Configuration
+### Render (Backend)
 
-Production environment variables should be configured with secure values. Never commit environment files to version control.
+The `render.yaml` configures:
+- Python web service with Gunicorn
+- PostgreSQL database
+- Environment variables
 
-### Deployment Platforms
+Set `ALLOWED_ORIGINS` in the Render dashboard to your Vercel domain.
 
-**Frontend:**
-- Vercel (recommended)
-- Netlify
-- AWS Amplify
+### Vercel (Frontend)
 
-**Backend:**
-- Render (recommended)
-- Railway
-- Heroku
-- AWS Elastic Beanstalk
+1. Import repository to Vercel
+2. Set environment variable:
+   ```
+   NEXT_PUBLIC_API_URL=https://your-backend.onrender.com
+   ```
+3. Deploy
 
-**Database:**
-- Render PostgreSQL
-- AWS RDS
-- Heroku Postgres
+---
 
-### CORS Configuration
+## Documentation
 
-Update allowed origins in backend/app.py for production:
+Comprehensive documentation is available in the `docs/` folder:
 
-```python
-CORS(app, resources={
-    r"/api/*": {
-        "origins": [
-            "http://localhost:3000",
-            "https://your-production-domain.com"
-        ]
-    }
-})
-```
+- `PROJECT_SUMMARY_COMPREHENSIVE.md` - Full project specification
+- `RECOMMENDATION_ENGINE_COMPREHENSIVE.md` - Algorithm deep dive
+- `MASTER_TEST_PLAN.md` - QA test strategy
 
-## Development
-
-### Backend Scripts
+Generate PDFs:
 
 ```bash
-python app.py              # Start development server
-python seed.py             # Seed database
-python tests/run_all_tests.py  # Run test suite
+python docs/generate_comprehensive_pdfs.py
 ```
 
-### Frontend Scripts
-
-```bash
-npm run dev      # Development server
-npm run build    # Production build
-npm run start    # Production server
-npm run lint     # Run ESLint
-```
-
-## Troubleshooting
-
-### Database Connection Issues
-
-Verify PostgreSQL is running and DATABASE_URL is correctly configured in backend/.env.
-
-### Port Conflicts
-
-If ports 3000 or 5000 are in use:
-
-Windows:
-```bash
-netstat -ano | findstr :5000
-taskkill /PID <PID> /F
-```
-
-Mac/Linux:
-```bash
-lsof -ti:5000 | xargs kill -9
-```
-
-### Module Not Found Errors
-
-Ensure virtual environment is activated and dependencies are installed:
-
-```bash
-cd backend
-source venv/bin/activate  # or venv\Scripts\activate on Windows
-pip install -r requirements.txt
-```
-
-### CORS Errors
-
-Verify FRONTEND_URL in backend/.env matches the frontend URL and CORS origins are properly configured in app.py.
-
-## Performance Considerations
-
-Current average response time is approximately 2 seconds per request. This is primarily due to database connection overhead. Recommended optimizations:
-
-- Implement connection pooling
-- Add Redis caching for static data
-- Optimize database queries
-- Add database indexes on frequently filtered columns
-
-## Contributing
-
-This is a proprietary project. For collaboration inquiries, contact the development team.
+---
 
 ## License
 
 All Rights Reserved
 
-## Support
+---
 
-For issues or questions, refer to the troubleshooting section or contact the development team.
+## Author
+
+Developed as a portfolio project demonstrating full-stack development, algorithm design, and production deployment practices.
