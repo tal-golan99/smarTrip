@@ -62,7 +62,7 @@ load_dotenv()
 # Raw point accumulation - max possible = 100
 SCORING_WEIGHTS = {
     # Base score for passing hard filters
-    'BASE_SCORE': 25.0,           # All trips that pass filters start here
+    'BASE_SCORE': 35.0,           # All trips that pass filters start here
     'RELAXED_PENALTY': -20.0,     # Penalty for relaxed/expanded results
     
     # Theme matching (user selected theme interests)
