@@ -1,9 +1,14 @@
 /**
  * API Client for SmartTrip Flask Backend
+ * V2 Schema: Uses TripTemplates + TripOccurrences
+ * 
  * Handles all HTTP requests to the Python backend
  */
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+
+// Use V2 API endpoints
+const API_VERSION = '/api/v2';
 
 /**
  * Generic API response type
@@ -12,8 +17,10 @@ interface ApiResponse<T = any> {
   success: boolean;
   data?: T;
   count?: number;
+  total?: number;
   error?: string;
   message?: string;
+  api_version?: string;
 }
 
 /**
@@ -86,28 +93,132 @@ export interface Tag {
   updatedAt: string;
 }
 
-export interface Trip {
+export interface TripType {
+  id: number;
+  name: string;
+  nameHe: string;
+  description?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// V2: Company (NEW)
+export interface Company {
+  id: number;
+  name: string;
+  nameHe: string;
+  description?: string;
+  descriptionHe?: string;
+  logoUrl?: string;
+  websiteUrl?: string;
+  email?: string;
+  phone?: string;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// V2: Trip Template (trip definition)
+export interface TripTemplate {
   id: number;
   title: string;
   titleHe: string;
   description: string;
   descriptionHe: string;
+  shortDescription?: string;
+  shortDescriptionHe?: string;
   imageUrl?: string;
-  startDate: string;
-  endDate: string;
-  price: number;
+  basePrice: number;
   singleSupplementPrice?: number;
-  maxCapacity: number;
-  spotsLeft: number;
-  status: 'Open' | 'Guaranteed' | 'Last Places' | 'Full' | 'Cancelled';
-  difficultyLevel: 1 | 2 | 3;
-  countryId: number;
-  guideId: number;
+  typicalDurationDays: number;
+  defaultMaxCapacity: number;
+  difficultyLevel: 1 | 2 | 3 | 4 | 5;
+  companyId: number;
+  tripTypeId?: number;
+  primaryCountryId?: number;
+  isActive: boolean;
+  properties?: Record<string, any>;
   createdAt: string;
   updatedAt: string;
-  // Optional relations (when include_relations=true)
+  // Relations
+  company?: Company;
+  tripType?: TripType;
+  primaryCountry?: Country;
+  countries?: Country[];
+  tags?: Tag[];
+  occurrences?: TripOccurrence[];
+}
+
+// V2: Trip Occurrence (scheduled instance)
+export interface TripOccurrence {
+  id: number;
+  tripTemplateId: number;
+  guideId?: number;
+  startDate: string;
+  endDate: string;
+  priceOverride?: number;
+  singleSupplementOverride?: number;
+  maxCapacityOverride?: number;
+  spotsLeft: number;
+  status: 'Open' | 'Guaranteed' | 'Last Places' | 'Full' | 'Cancelled';
+  imageUrlOverride?: string;
+  notes?: string;
+  notesHe?: string;
+  properties?: Record<string, any>;
+  createdAt: string;
+  updatedAt: string;
+  // Computed
+  effectivePrice?: number;
+  effectiveMaxCapacity?: number;
+  effectiveImageUrl?: string;
+  durationDays?: number;
+  // Relations
+  template?: TripTemplate;
+  guide?: Guide;
+}
+
+// Backward Compatible Trip Interface (maps occurrence to old format)
+export interface Trip {
+  id: number;
+  templateId?: number;  // NEW: Link to template
+  title: string;
+  titleHe: string;
+  title_he?: string;  // snake_case alias
+  description: string;
+  descriptionHe: string;
+  description_he?: string;  // snake_case alias
+  imageUrl?: string;
+  image_url?: string;  // snake_case alias
+  startDate: string;
+  start_date?: string;  // snake_case alias
+  endDate: string;
+  end_date?: string;  // snake_case alias
+  price: number;
+  singleSupplementPrice?: number;
+  single_supplement_price?: number;  // snake_case alias
+  maxCapacity: number;
+  max_capacity?: number;  // snake_case alias
+  spotsLeft: number;
+  spots_left?: number;  // snake_case alias
+  status: 'Open' | 'Guaranteed' | 'Last Places' | 'Full' | 'Cancelled';
+  difficultyLevel: 1 | 2 | 3;
+  difficulty_level?: number;  // snake_case alias
+  countryId: number;
+  country_id?: number;  // snake_case alias
+  guideId?: number;
+  guide_id?: number;  // snake_case alias
+  tripTypeId?: number;
+  trip_type_id?: number;  // snake_case alias
+  companyId?: number;  // NEW
+  company_id?: number;  // NEW snake_case alias
+  createdAt: string;
+  updatedAt: string;
+  // Optional relations
   country?: Country;
   guide?: Guide;
+  tripType?: TripType;
+  trip_type?: TripType;  // snake_case alias
+  company?: Company;  // NEW
   tags?: Tag[];
 }
 
@@ -115,11 +226,16 @@ export interface TripFilters {
   country_id?: number;
   guide_id?: number;
   tag_id?: number;
+  trip_type_id?: number;
   status?: string;
   difficulty?: number;
   start_date?: string;
   end_date?: string;
+  year?: number;
+  month?: number;
   include_relations?: boolean;
+  limit?: number;
+  offset?: number;
 }
 
 export interface RecommendationPreferences {
@@ -132,11 +248,14 @@ export interface RecommendationPreferences {
   budget?: number;                    // Maximum budget in ILS/USD
   difficulty?: number;                // 1=Easy, 2=Moderate, 3=Hard
   start_date?: string;                // ISO date string (YYYY-MM-DD)
+  year?: number | string;             // Year filter
+  month?: number | string;            // Month filter (1-12)
 }
 
 export interface RecommendedTrip extends Trip {
   match_score: number;                // 0-100 score
   match_details: string[];            // List of match reasons
+  is_relaxed?: boolean;               // True if from relaxed criteria
 }
 
 // ============================================
@@ -187,7 +306,115 @@ export async function getTags(): Promise<ApiResponse<Tag[]>> {
 }
 
 /**
- * Get all trips with optional filters
+ * Get all trip types
+ */
+export async function getTripTypes(): Promise<ApiResponse<TripType[]>> {
+  return apiFetch<TripType[]>('/api/trip-types');
+}
+
+// ============================================
+// V2 API: COMPANIES
+// ============================================
+
+/**
+ * Get all companies
+ */
+export async function getCompanies(): Promise<ApiResponse<Company[]>> {
+  return apiFetch<Company[]>(`${API_VERSION}/companies`);
+}
+
+/**
+ * Get company by ID
+ */
+export async function getCompany(id: number): Promise<ApiResponse<Company>> {
+  return apiFetch<Company>(`${API_VERSION}/companies/${id}`);
+}
+
+// ============================================
+// V2 API: TRIP TEMPLATES
+// ============================================
+
+/**
+ * Get all trip templates with optional filters
+ */
+export async function getTemplates(filters?: {
+  company_id?: number;
+  trip_type_id?: number;
+  country_id?: number;
+  difficulty?: number;
+  include_occurrences?: boolean;
+  limit?: number;
+  offset?: number;
+}): Promise<ApiResponse<TripTemplate[]>> {
+  const params = new URLSearchParams();
+  
+  if (filters) {
+    Object.entries(filters).forEach(([key, value]) => {
+      if (value !== undefined && value !== null) {
+        params.append(key, String(value));
+      }
+    });
+  }
+  
+  const query = params.toString() ? `?${params.toString()}` : '';
+  return apiFetch<TripTemplate[]>(`${API_VERSION}/templates${query}`);
+}
+
+/**
+ * Get template by ID with full details
+ */
+export async function getTemplate(id: number): Promise<ApiResponse<TripTemplate>> {
+  return apiFetch<TripTemplate>(`${API_VERSION}/templates/${id}`);
+}
+
+// ============================================
+// V2 API: TRIP OCCURRENCES
+// ============================================
+
+/**
+ * Get all trip occurrences with optional filters
+ */
+export async function getOccurrences(filters?: {
+  template_id?: number;
+  guide_id?: number;
+  status?: string;
+  start_date?: string;
+  end_date?: string;
+  year?: number;
+  month?: number;
+  max_price?: number;
+  include_template?: boolean;
+  limit?: number;
+  offset?: number;
+}): Promise<ApiResponse<TripOccurrence[]>> {
+  const params = new URLSearchParams();
+  
+  if (filters) {
+    Object.entries(filters).forEach(([key, value]) => {
+      if (value !== undefined && value !== null) {
+        params.append(key, String(value));
+      }
+    });
+  }
+  
+  const query = params.toString() ? `?${params.toString()}` : '';
+  return apiFetch<TripOccurrence[]>(`${API_VERSION}/occurrences${query}`);
+}
+
+/**
+ * Get occurrence by ID with full details
+ */
+export async function getOccurrence(id: number): Promise<ApiResponse<TripOccurrence>> {
+  return apiFetch<TripOccurrence>(`${API_VERSION}/occurrences/${id}`);
+}
+
+// ============================================
+// V2 API: TRIPS (Backward Compatible)
+// ============================================
+
+/**
+ * Get all trips with optional filters (V2 - backward compatible)
+ * Returns occurrences formatted as Trip objects
  */
 export async function getTrips(filters?: TripFilters): Promise<ApiResponse<Trip[]>> {
   const params = new URLSearchParams();
@@ -201,26 +428,49 @@ export async function getTrips(filters?: TripFilters): Promise<ApiResponse<Trip[
   }
   
   const query = params.toString() ? `?${params.toString()}` : '';
-  return apiFetch<Trip[]>(`/api/trips${query}`);
+  // Use V2 trips endpoint (backward compatible)
+  return apiFetch<Trip[]>(`${API_VERSION}/trips${query}`);
 }
 
 /**
- * Get trip by ID with full details
+ * Get trip by ID with full details (V2 - backward compatible)
+ * Returns occurrence formatted as Trip object
  */
 export async function getTrip(id: number): Promise<ApiResponse<Trip>> {
-  return apiFetch<Trip>(`/api/trips/${id}`);
+  // Use V2 trips endpoint (backward compatible)
+  return apiFetch<Trip>(`${API_VERSION}/trips/${id}`);
 }
 
 /**
- * Get personalized trip recommendations with weighted scoring
+ * Get personalized trip recommendations (V2)
  * Returns trips sorted by match score (0-100)
  */
 export async function getRecommendations(
   preferences: RecommendationPreferences
 ): Promise<ApiResponse<RecommendedTrip[]>> {
-  return apiFetch<RecommendedTrip[]>('/api/recommendations', {
+  // Use V2 recommendations endpoint
+  return apiFetch<RecommendedTrip[]>(`${API_VERSION}/recommendations`, {
     method: 'POST',
     body: JSON.stringify(preferences),
   });
 }
 
+// ============================================
+// V2 API: SCHEMA INFO
+// ============================================
+
+/**
+ * Get V2 schema information and statistics
+ */
+export async function getSchemaInfo(): Promise<ApiResponse<{
+  schema_version: string;
+  statistics: {
+    companies: number;
+    templates: number;
+    occurrences: number;
+    active_occurrences: number;
+  };
+  endpoints: Record<string, string>;
+}>> {
+  return apiFetch(`${API_VERSION}/schema-info`);
+}

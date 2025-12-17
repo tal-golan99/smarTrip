@@ -45,10 +45,8 @@ class Continent(enum.Enum):
     ANTARCTICA = "Antarctica"
 
 
-class TagCategory(enum.Enum):
-    """Tag categories - Type vs Theme"""
-    TYPE = "Type"  # The style of the trip (e.g., Safari, Cruise, Hiking)
-    THEME = "Theme"  # The content/focus of the trip (e.g., Wildlife, Culture, Food)
+# TagCategory enum removed - category column dropped from tags table
+# Tags now only contain THEME tags; TYPE information is in trip_types table
 
 
 # ============================================
@@ -158,10 +156,10 @@ class TripType(Base):
 
 
 class Tag(Base):
-    """Tags table - stores trip theme tags (THEME category only)
+    """Tags table - stores trip theme tags
     
-    Note: After migration, this table only contains THEME tags.
-    TYPE tags have been moved to the trip_types table.
+    Note: After V2 migration, category column was dropped.
+    All tags are now THEME tags; TYPE info is in trip_types table.
     """
     __tablename__ = 'tags'
     
@@ -169,7 +167,6 @@ class Tag(Base):
     name = Column(String(100), unique=True, nullable=False, index=True)
     name_he = Column(String(100), nullable=False)  # Hebrew name
     description = Column(Text)
-    category = Column(Enum(TagCategory), nullable=False, index=True)  # Should always be THEME after migration
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
     
@@ -177,7 +174,7 @@ class Tag(Base):
     trip_tags = relationship('TripTag', back_populates='tag', cascade='all, delete-orphan')
     
     def __repr__(self):
-        return f"<Tag(id={self.id}, name='{self.name}', category='{self.category.value}')>"
+        return f"<Tag(id={self.id}, name='{self.name}')>"
     
     def to_dict(self):
         """Convert model to dictionary for JSON serialization"""
@@ -185,8 +182,8 @@ class Tag(Base):
             'id': self.id,
             'name': self.name,
             'nameHe': self.name_he,
+            'category': 'theme',  # V2: All tags are theme tags (backward compatibility)
             'description': self.description,
-            'category': self.category.value,
             'createdAt': self.created_at.isoformat() if self.created_at else None,
             'updatedAt': self.updated_at.isoformat() if self.updated_at else None,
         }

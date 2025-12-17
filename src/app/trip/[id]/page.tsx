@@ -37,6 +37,12 @@ interface TripType {
   name_he?: string;
 }
 
+interface Company {
+  id: number;
+  name: string;
+  name_he?: string;
+}
+
 interface Trip {
   id: number;
   title?: string;
@@ -54,6 +60,7 @@ interface Trip {
   guide?: Guide;
   trip_type?: TripType;
   trip_type_id?: number;
+  company?: Company;
 }
 
 // Helper to get trip field with both snake_case and camelCase support
@@ -184,9 +191,10 @@ export default function TripPage() {
       setError(null);
 
       try {
-        console.log('Fetching trip:', `${API_URL}/api/trips/${tripId}`);
+        // V2 API: Uses templates + occurrences schema
+        console.log('Fetching trip:', `${API_URL}/api/v2/trips/${tripId}`);
         
-        const response = await fetch(`${API_URL}/api/trips/${tripId}`);
+        const response = await fetch(`${API_URL}/api/v2/trips/${tripId}`);
         
         if (!response.ok) {
           if (response.status === 404) {
@@ -301,14 +309,6 @@ export default function TripPage() {
         {/* Title Overlay (Bottom) */}
         <div className="absolute bottom-0 left-0 right-0 p-6 md:p-10">
           <div className="container mx-auto max-w-4xl">
-            {/* Country Badge */}
-            {countryName && (
-              <div className="inline-flex items-center gap-2 px-3 py-1 bg-white/20 backdrop-blur-sm rounded-full mb-4">
-                <MapPin className="w-4 h-4 text-white" />
-                <span className="text-sm text-white font-medium">{countryName}</span>
-              </div>
-            )}
-            
             <h1 className="text-3xl md:text-5xl font-bold text-white drop-shadow-lg text-right">
               {title}
             </h1>
@@ -342,7 +342,7 @@ export default function TripPage() {
           <div className="bg-gray-50 rounded-xl p-4 text-center">
             <DollarSign className="w-6 h-6 text-[#12acbe] mx-auto mb-2" />
             <p className="text-xs text-gray-500 mb-1">מחיר</p>
-            <p className="text-sm font-bold text-[#076839]">${trip.price?.toLocaleString()}</p>
+            <p className="text-sm font-bold text-[#076839]">${Math.round(trip.price || 0).toLocaleString()}</p>
           </div>
           
           {/* Difficulty */}
@@ -360,18 +360,34 @@ export default function TripPage() {
           </div>
         </div>
 
-        {/* Guide Info */}
-        {guideName && (
-          <div className="flex items-center gap-3 mb-8 p-4 bg-[#12acbe]/10 rounded-xl">
-            <div className="w-12 h-12 rounded-full bg-[#12acbe] flex items-center justify-center">
-              <User className="w-6 h-6 text-white" />
+        {/* Guide and Company Info */}
+        <div className="flex flex-wrap gap-4 mb-8">
+          {/* Guide Info */}
+          {guideName && (
+            <div className="flex-1 min-w-[200px] flex items-center gap-3 p-4 bg-[#12acbe]/10 rounded-xl">
+              <div className="w-12 h-12 rounded-full bg-[#12acbe] flex items-center justify-center">
+                <User className="w-6 h-6 text-white" />
+              </div>
+              <div className="text-right">
+                <p className="text-sm text-gray-500">בהדרכה של</p>
+                <p className="text-lg font-bold text-[#076839]">{guideName}</p>
+              </div>
             </div>
-            <div className="text-right">
-              <p className="text-sm text-gray-500">בהדרכה של</p>
-              <p className="text-lg font-bold text-[#076839]">{guideName}</p>
+          )}
+          
+          {/* Company Info */}
+          {trip.company && (
+            <div className="flex-1 min-w-[200px] flex items-center gap-3 p-4 bg-[#076839]/10 rounded-xl">
+              <div className="w-12 h-12 rounded-full bg-[#076839] flex items-center justify-center">
+                <MapPin className="w-6 h-6 text-white" />
+              </div>
+              <div className="text-right">
+                <p className="text-sm text-gray-500">מאורגן על ידי</p>
+                <p className="text-lg font-bold text-[#076839]">{trip.company.name_he || trip.company.name}</p>
+              </div>
             </div>
-          </div>
-        )}
+          )}
+        </div>
 
         {/* Description */}
         <div className="mb-8">

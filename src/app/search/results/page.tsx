@@ -15,6 +15,7 @@ import {
   flushPendingEvents,
   ClickSource,
 } from '@/lib/useTracking';
+import { trackEvent } from '@/lib/tracking';
 
 // API URL from environment variable (set in Vercel)
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
@@ -189,6 +190,70 @@ const getTripField = (trip: Trip, snakeCase: string, camelCase: string): any => 
   return (trip as any)[snakeCase] || (trip as any)[camelCase];
 };
 
+// ============================================
+// SCROLL DEPTH TRACKING HOOK (Phase 1)
+// ============================================
+
+/**
+ * Track how far user scrolls through results.
+ * Fires events at 25%, 50%, 75%, and 100% thresholds.
+ */
+function useScrollDepthTracking(totalResults: number, isLoading: boolean) {
+  const trackedDepthsRef = useRef(new Set<number>());
+  const scrollStartTimeRef = useRef<number | null>(null);
+  
+  useEffect(() => {
+    // Reset when results change
+    trackedDepthsRef.current = new Set<number>();
+    scrollStartTimeRef.current = Date.now();
+  }, [totalResults]);
+  
+  useEffect(() => {
+    if (isLoading || totalResults === 0) return;
+    
+    const handleScroll = () => {
+      const scrollHeight = document.documentElement.scrollHeight - window.innerHeight;
+      if (scrollHeight <= 0) return;
+      
+      const scrollPercent = Math.floor((window.scrollY / scrollHeight) * 100);
+      const thresholds = [25, 50, 75, 100];
+      
+      for (const threshold of thresholds) {
+        if (scrollPercent >= threshold && !trackedDepthsRef.current.has(threshold)) {
+          trackedDepthsRef.current.add(threshold);
+          
+          const timeOnPage = scrollStartTimeRef.current 
+            ? Math.floor((Date.now() - scrollStartTimeRef.current) / 1000)
+            : 0;
+          
+          trackEvent('scroll_depth', {
+            metadata: {
+              depth_percent: threshold,
+              trips_visible: Math.ceil((threshold / 100) * totalResults),
+              time_on_page_seconds: timeOnPage,
+            },
+          });
+        }
+      }
+    };
+    
+    // Throttle scroll events
+    let ticking = false;
+    const throttledScroll = () => {
+      if (!ticking) {
+        window.requestAnimationFrame(() => {
+          handleScroll();
+          ticking = false;
+        });
+        ticking = true;
+      }
+    };
+    
+    window.addEventListener('scroll', throttledScroll, { passive: true });
+    return () => window.removeEventListener('scroll', throttledScroll);
+  }, [totalResults, isLoading]);
+}
+
 function SearchResultsPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -221,6 +286,9 @@ function SearchResultsPageContent() {
         }
       : null
   );
+  
+  // Phase 1: Track scroll depth through results
+  useScrollDepthTracking(results.length, isLoading);
 
   // Scroll to top on mount and when search params change
   useEffect(() => {
@@ -260,13 +328,14 @@ function SearchResultsPageContent() {
         };
 
         // Log the API URL being used (for debugging)
-        console.log('Fetching recommendations from:', `${API_URL}/api/recommendations`);
+        // V2 API: Uses templates + occurrences schema
+        console.log('Fetching recommendations from:', `${API_URL}/api/v2/recommendations`);
         console.log('Request preferences:', preferences);
 
         // Phase 1: Track response time
         const startTime = Date.now();
 
-        const response = await fetch(`${API_URL}/api/recommendations`, {
+        const response = await fetch(`${API_URL}/api/v2/recommendations`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -307,7 +376,7 @@ function SearchResultsPageContent() {
         setShowRefinementMessage(data.show_refinement_message || false);
       } catch (err) {
         console.error('Search failed:', err);
-        console.error('Attempted to fetch from:', `${API_URL}/api/recommendations`);
+        console.error('Attempted to fetch from:', `${API_URL}/api/v2/recommendations`);
         setError('שגיאה בטעינת התוצאות. אנא נסה שוב.');
       } finally {
         setIsLoading(false);
@@ -584,7 +653,7 @@ function SearchResultsPageContent() {
                         )}
                         {trip?.price && (
                           <span className="whitespace-nowrap text-sm md:text-lg">
-                            ${trip.price.toLocaleString()}
+                            ${Math.round(trip.price).toLocaleString()}
                           </span>
                         )}
                       </div>

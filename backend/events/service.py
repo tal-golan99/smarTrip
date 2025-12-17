@@ -20,7 +20,7 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from database import SessionLocal
-from .models import User, Session, Event, TripInteraction
+from .models import User, Session, Event, TripInteraction, EventType
 
 
 # ============================================
@@ -182,7 +182,7 @@ class EventService:
             email: Optional email if user is registered
             
         Returns:
-            User object
+            User object (detached from DB session)
         """
         db = SessionLocal()
         try:
@@ -197,6 +197,8 @@ class EventService:
                 user.last_seen_at = datetime.utcnow()
                 db.commit()
                 db.refresh(user)
+                # Expunge to detach from session but keep attributes
+                db.expunge(user)
                 return user
             
             # Try to find by email if provided
@@ -206,6 +208,8 @@ class EventService:
                     user.last_seen_at = datetime.utcnow()
                     db.commit()
                     db.refresh(user)
+                    # Expunge to detach from session but keep attributes
+                    db.expunge(user)
                     return user
             
             # Create new anonymous user
@@ -218,6 +222,8 @@ class EventService:
             db.commit()
             db.refresh(user)
             
+            # Expunge to detach from session but keep attributes
+            db.expunge(user)
             return user
             
         finally:
@@ -250,7 +256,7 @@ class EventService:
             ip_address: Client IP (already extracted via get_real_ip)
             
         Returns:
-            Session object
+            Session object (detached from DB session)
         """
         db = SessionLocal()
         try:
@@ -262,6 +268,8 @@ class EventService:
             if session:
                 # Check if session is still active
                 if session.ended_at is None:
+                    # Expunge to detach from session but keep attributes
+                    db.expunge(session)
                     return session
             
             # Create new session with device_type from frontend
@@ -276,7 +284,6 @@ class EventService:
             )
             db.add(session)
             db.commit()
-            db.refresh(session)
             
             # Update user's session count
             if user_id:
@@ -285,6 +292,11 @@ class EventService:
                     user.total_sessions += 1
                     db.commit()
             
+            # Refresh session to get current state after all commits
+            db.refresh(session)
+            
+            # Expunge to detach from session but keep attributes
+            db.expunge(session)
             return session
             
         finally:
@@ -378,8 +390,17 @@ class EventService:
         """
         db = SessionLocal()
         try:
-            # Get event category
+            # Get event category (for counters and interactions, not for DB storage)
             category = EVENT_CATEGORIES.get(event_type, 'unknown')
+            
+            # Look up event_type_id from event_types table
+            event_type_obj = db.query(EventType).filter(EventType.name == event_type).first()
+            if not event_type_obj:
+                # Fallback to page_view (id=1) if event type not found
+                print(f"[WARNING] Event type not found: {event_type}, using page_view")
+                event_type_id = 1
+            else:
+                event_type_id = event_type_obj.id
             
             # Parse client timestamp
             parsed_client_ts = None
@@ -401,13 +422,12 @@ class EventService:
                 except (ValueError, TypeError):
                     pass
             
-            # Create event
+            # Create event with event_type_id (3NF schema)
             event = Event(
                 user_id=user_id,
                 session_id=sess_uuid,
                 anonymous_id=anon_uuid,
-                event_type=event_type,
-                event_category=category,
+                event_type_id=event_type_id,
                 trip_id=trip_id,
                 recommendation_request_id=rec_uuid,
                 source=source,
@@ -421,7 +441,6 @@ class EventService:
             
             db.add(event)
             db.commit()
-            db.refresh(event)
             
             # Update session counters
             self._update_session_counters(db, sess_uuid, event_type)
@@ -434,6 +453,11 @@ class EventService:
             if trip_id and category in ('engagement', 'conversion'):
                 self._update_trip_interactions(db, trip_id, event_type, anon_uuid, metadata)
             
+            # Refresh event to get all attributes after all commits
+            db.refresh(event)
+            
+            # Expunge to detach from session but keep attributes
+            db.expunge(event)
             return event
             
         finally:

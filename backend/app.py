@@ -8,7 +8,7 @@ from flask import Flask, jsonify, request
 from flask_cors import CORS
 from dotenv import load_dotenv
 from database import init_db, db_session
-from models import Trip, Country, Guide, Tag, TripTag, TripType, TripStatus, TagCategory
+from models import Trip, Country, Guide, Tag, TripTag, TripType, TripStatus
 from sqlalchemy import and_, or_
 from sqlalchemy.orm import joinedload, selectinload
 from datetime import datetime, timedelta, date
@@ -31,6 +31,22 @@ try:
 except ImportError as e:
     print(f"[WARNING] Events module not available: {e}")
     EVENTS_ENABLED = False
+
+# Import V2 API (Phase 2 - New Schema)
+try:
+    from api_v2 import api_v2_bp
+    API_V2_ENABLED = True
+except ImportError as e:
+    print(f"[WARNING] API V2 module not available: {e}")
+    API_V2_ENABLED = False
+
+# Import Background Scheduler (Phase 1 - Background Jobs)
+try:
+    from scheduler import start_scheduler, get_scheduler_status
+    SCHEDULER_ENABLED = True
+except ImportError as e:
+    print(f"[WARNING] Scheduler module not available: {e}")
+    SCHEDULER_ENABLED = False
 
 # Load environment variables
 load_dotenv()
@@ -131,6 +147,13 @@ if EVENTS_ENABLED:
     print("[INIT] Events module registered (Phase 1)")
 else:
     print("[INIT] Events module not available")
+
+# Register Phase 2 API V2 Blueprint (New Schema)
+if API_V2_ENABLED:
+    app.register_blueprint(api_v2_bp, url_prefix='/api/v2')
+    print("[INIT] API V2 module registered (Phase 2 - Templates/Occurrences)")
+else:
+    print("[INIT] API V2 module not available")
 
 
 # ============================================
@@ -475,8 +498,8 @@ def get_tags():
     For trip styles, use /api/trip-types endpoint.
     """
     try:
-        # Only return Theme tags (Type tags have been migrated to trip_types)
-        tags = db_session.query(Tag).filter(Tag.category == TagCategory.THEME).order_by(Tag.name).all()
+        # All tags are now theme tags (category column dropped in V2 migration)
+        tags = db_session.query(Tag).order_by(Tag.name).all()
         
         return jsonify({
             'success': True,
@@ -492,12 +515,27 @@ def get_tags():
 
 
 # ============================================
-# TRIPS API
+# TRIPS API (V1 - DEPRECATED)
 # ============================================
+# NOTE: These endpoints are deprecated. Use /api/v2/trips instead.
+# V2 provides template/occurrence architecture with better filtering.
+
+def add_deprecation_headers(response, deprecated_endpoint, new_endpoint):
+    """Add deprecation headers to response"""
+    response.headers['Deprecation'] = 'true'
+    response.headers['Sunset'] = '2025-06-01'
+    response.headers['Link'] = f'<{new_endpoint}>; rel="successor-version"'
+    response.headers['X-Deprecated-Message'] = f'This endpoint is deprecated. Use {new_endpoint} instead.'
+    return response
+
 
 @app.route('/api/trips', methods=['GET'])
 def get_trips():
-    """Get all trips with optional filters and pagination"""
+    """
+    [DEPRECATED] Get all trips with optional filters and pagination.
+    
+    Use /api/v2/trips instead for the new template/occurrence architecture.
+    """
     try:
         # Get query parameters
         country_id = request.args.get('country_id', type=int)
@@ -563,14 +601,18 @@ def get_trips():
         # Execute query
         trips = query.all()
         
-        return jsonify({
+        response = jsonify({
             'success': True,
             'count': len(trips),
             'total': total_count,
             'offset': offset,
             'limit': limit,
-            'data': [trip.to_dict(include_relations=include_relations) for trip in trips]
-        }), 200
+            'data': [trip.to_dict(include_relations=include_relations) for trip in trips],
+            '_deprecated': True,
+            '_deprecation_notice': 'This endpoint is deprecated. Use /api/v2/trips instead.',
+            '_successor': '/api/v2/trips'
+        })
+        return add_deprecation_headers(response, '/api/trips', '/api/v2/trips'), 200
     
     except Exception as e:
         return jsonify({
@@ -581,7 +623,11 @@ def get_trips():
 
 @app.route('/api/trips/<int:trip_id>', methods=['GET'])
 def get_trip(trip_id):
-    """Get a specific trip by ID with full details"""
+    """
+    [DEPRECATED] Get a specific trip by ID with full details.
+    
+    Use /api/v2/trips/<id> instead for the new template/occurrence architecture.
+    """
     try:
         trip = db_session.query(Trip).filter(Trip.id == trip_id).first()
         
@@ -591,10 +637,14 @@ def get_trip(trip_id):
                 'error': 'Trip not found'
             }), 404
         
-        return jsonify({
+        response = jsonify({
             'success': True,
-            'data': trip.to_dict(include_relations=True)
-        }), 200
+            'data': trip.to_dict(include_relations=True),
+            '_deprecated': True,
+            '_deprecation_notice': 'This endpoint is deprecated. Use /api/v2/trips/<id> instead.',
+            '_successor': f'/api/v2/trips/{trip_id}'
+        })
+        return add_deprecation_headers(response, f'/api/trips/{trip_id}', f'/api/v2/trips/{trip_id}'), 200
     
     except Exception as e:
         return jsonify({
@@ -604,13 +654,21 @@ def get_trip(trip_id):
 
 
 # ============================================
-# RECOMMENDATION ENGINE (Weighted Scoring Algorithm)
+# RECOMMENDATION ENGINE (V1 - DEPRECATED)
 # ============================================
+# NOTE: This endpoint is deprecated. Use /api/v2/recommendations instead.
+# V2 provides full feature parity plus new features like company attribution.
 
 @app.route('/api/recommendations', methods=['POST'])
 def get_recommendations():
     """
-    Smart recommendation engine with weighted scoring (0-100 points)
+    [DEPRECATED] Smart recommendation engine with weighted scoring (0-100 points).
+    
+    Use /api/v2/recommendations instead - it provides full feature parity plus:
+    - Company attribution
+    - Price overrides per occurrence
+    - Better relaxed search logic
+    - Search classification
     
     STRICT FILTERING: If countries are selected, ONLY trips from those countries are returned.
     
@@ -936,9 +994,10 @@ def get_recommendations():
             match_details = []  # Don't show base score to users - it's implicit
             
             # Get trip's theme tags (relationships already loaded via joinedload - no N+1 queries)
+            # Note: All tags are now theme tags after V2 migration (category column dropped)
             trip_theme_tags = []
             try:
-                trip_theme_tags = [tt.tag_id for tt in trip.trip_tags if tt.tag and tt.tag.category == TagCategory.THEME]
+                trip_theme_tags = [tt.tag_id for tt in trip.trip_tags if tt.tag]
             except Exception as tag_err:
                 print(f"[RECOMMENDATIONS] Tag access error for trip {trip.id}: {tag_err}", flush=True)
             
@@ -1254,7 +1313,8 @@ def get_recommendations():
                 
                 trip_theme_tags = []
                 try:
-                    trip_theme_tags = [tt.tag_id for tt in trip.trip_tags if tt.tag and tt.tag.category == TagCategory.THEME]
+                    # All tags are theme tags after V2 migration
+                    trip_theme_tags = [tt.tag_id for tt in trip.trip_tags if tt.tag]
                 except:
                     pass
                 
@@ -1359,7 +1419,7 @@ def get_recommendations():
         # If absolutely no results found (both primary and relaxed empty)
         if not all_trips:
             print(f"[RECOMMENDATIONS] No results found from either primary or relaxed search", flush=True)
-            return jsonify({
+            response = jsonify({
                 'success': True,
                 'count': 0,
                 'primary_count': 0,
@@ -1370,8 +1430,12 @@ def get_recommendations():
                 'has_relaxed_results': False,
                 'score_thresholds': SCORE_THRESHOLDS,
                 'show_refinement_message': True,
-                'message': 'No trips match your criteria. Try adjusting your preferences.'
-            }), 200
+                'message': 'No trips match your criteria. Try adjusting your preferences.',
+                '_deprecated': True,
+                '_deprecation_notice': 'This endpoint is deprecated. Use /api/v2/recommendations instead.',
+                '_successor': '/api/v2/recommendations'
+            })
+            return add_deprecation_headers(response, '/api/recommendations', '/api/v2/recommendations'), 200
         
         # Check if top result is NOT high-score (show message for orange AND red)
         top_score = all_trips[0]['match_score'] if all_trips else 0
@@ -1404,7 +1468,7 @@ def get_recommendations():
             except Exception as log_err:
                 print(f"[WARNING] Failed to log request: {log_err}", flush=True)
         
-        return jsonify({
+        response = jsonify({
             'success': True,
             'count': len(all_trips),
             'primary_count': len(top_trips),
@@ -1417,9 +1481,13 @@ def get_recommendations():
             'show_refinement_message': show_refinement_message,
             'request_id': request_id,  # Phase 1: For event correlation
             'search_type': search_type,  # Phase 1: exploration or focused_search
-            'message': f'Found {len(top_trips)} recommended trips' + (f' + {len(relaxed_trips)} expanded results' if has_relaxed else '')
-        }), 200
-    
+            'message': f'Found {len(top_trips)} recommended trips' + (f' + {len(relaxed_trips)} expanded results' if has_relaxed else ''),
+            '_deprecated': True,
+            '_deprecation_notice': 'This endpoint is deprecated. Use /api/v2/recommendations instead.',
+            '_successor': '/api/v2/recommendations'
+        })
+        return add_deprecation_headers(response, '/api/recommendations', '/api/v2/recommendations'), 200
+
     except Exception as e:
         import traceback
         print(f"[RECOMMENDATIONS] ERROR: {str(e)}", flush=True)
@@ -1802,6 +1870,32 @@ def auto_seed_if_empty():
 
 
 # ============================================
+# SCHEDULER STATUS ENDPOINT
+# ============================================
+
+@app.route('/api/scheduler/status', methods=['GET'])
+def scheduler_status():
+    """Get background scheduler status and job information"""
+    if not SCHEDULER_ENABLED:
+        return jsonify({
+            'success': False,
+            'error': 'Scheduler module not available'
+        }), 503
+    
+    try:
+        status = get_scheduler_status()
+        return jsonify({
+            'success': True,
+            'data': status
+        }), 200
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+# ============================================
 # MAIN
 # ============================================
 
@@ -1810,6 +1904,17 @@ with app.app_context():
     init_db()
     auto_seed_if_empty()
 
+# Start background scheduler (runs in-process with Flask)
+# This starts the scheduler when the module is loaded (works with gunicorn)
+if SCHEDULER_ENABLED:
+    try:
+        start_scheduler()
+        print("[INIT] Background scheduler started (Phase 1 jobs)")
+    except Exception as e:
+        print(f"[WARNING] Failed to start scheduler: {e}")
+else:
+    print("[INIT] Scheduler not available")
+
 if __name__ == '__main__':
     # Run Flask development server
     port = int(os.getenv('PORT', 5000))
@@ -1817,5 +1922,6 @@ if __name__ == '__main__':
     
     print(f"SmartTrip API running on http://{host}:{port}")
     print(f"API Documentation: http://{host}:{port}/api/health")
+    print(f"Scheduler Status: http://{host}:{port}/api/scheduler/status")
     
     app.run(host=host, port=port, debug=True)

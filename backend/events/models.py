@@ -45,7 +45,7 @@ class User(Base):
     name = Column(String(100), nullable=True)
     name_he = Column(String(100), nullable=True)
     phone = Column(String(20), nullable=True)
-    preferred_language = Column(String(5), default='he')
+    # Note: preferred_language column removed per schema changes
     
     # Activity tracking
     first_seen_at = Column(DateTime(timezone=True), default=datetime.utcnow)
@@ -132,6 +132,32 @@ class Session(Base):
         }
 
 
+class EventCategory(Base):
+    """Event category for 3NF normalization."""
+    __tablename__ = 'event_categories'
+    
+    id = Column(Integer, primary_key=True)
+    name = Column(String(50), unique=True, nullable=False)
+    description = Column(Text, nullable=True)
+    
+    # Relationships
+    event_types = relationship('EventType', back_populates='category')
+
+
+class EventType(Base):
+    """Event type for 3NF normalization."""
+    __tablename__ = 'event_types'
+    
+    id = Column(Integer, primary_key=True)
+    name = Column(String(50), unique=True, nullable=False)
+    category_id = Column(Integer, ForeignKey('event_categories.id'), nullable=False)
+    description = Column(Text, nullable=True)
+    
+    # Relationships
+    category = relationship('EventCategory', back_populates='event_types')
+    events = relationship('Event', back_populates='event_type_rel')
+
+
 class Event(Base):
     """
     User interaction event model.
@@ -153,9 +179,8 @@ class Event(Base):
     session_id = Column(UUID(as_uuid=True), nullable=False)
     anonymous_id = Column(UUID(as_uuid=True), nullable=False)
     
-    # Event classification
-    event_type = Column(String(50), nullable=False)
-    event_category = Column(String(30), nullable=False)
+    # Event classification - FK to event_types (3NF normalized)
+    event_type_id = Column(Integer, ForeignKey('event_types.id'), nullable=False)
     
     # Context
     trip_id = Column(Integer, nullable=True)  # No FK to avoid dependency issues
@@ -185,14 +210,16 @@ class Event(Base):
     
     # Relationships
     user = relationship('User', back_populates='events')
+    event_type_rel = relationship('EventType', back_populates='events')
     # Note: No direct relationship to Session - linked via session_id UUID, not FK
     
     def to_dict(self):
         """Serialize event for API response."""
         return {
             'id': self.id,
-            'event_type': self.event_type,
-            'event_category': self.event_category,
+            'event_type_id': self.event_type_id,
+            'event_type': self.event_type_rel.name if self.event_type_rel else None,
+            'event_category': self.event_type_rel.category.name if self.event_type_rel and self.event_type_rel.category else None,
             'trip_id': self.trip_id,
             'source': self.source,
             'metadata': self.event_data,  # Return as 'metadata' for API consistency
