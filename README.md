@@ -1,4 +1,4 @@
-# SmartTrip
+# SmarTrip
 
 > An intelligent trip recommendation platform that matches travelers with personalized travel experiences using a transparent, rule-based scoring algorithm.
 
