@@ -10,8 +10,8 @@ services:
         value: production
       - key: SECRET_KEY
         generateValue: true
-      - key: FRONTEND_URL
-        value: https://your-frontend-url.vercel.app
+      - key: ALLOWED_ORIGINS
+        sync: false  # Set this in Render dashboard with your actual Vercel URL
       - key: DATABASE_URL
         fromDatabase:
           name: smarttrip-db

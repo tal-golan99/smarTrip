@@ -1870,6 +1870,55 @@ def auto_seed_if_empty():
 
 
 # ============================================
+# V2 SCHEMA MIGRATION ENDPOINT
+# ============================================
+
+@app.route('/api/migration/v2-schema', methods=['POST'])
+def run_v2_schema_migration():
+    """
+    Run V2 schema migration (companies + templates/occurrences).
+    Call via: POST https://your-backend.onrender.com/api/migration/v2-schema
+    Safe to run multiple times.
+    """
+    results = {'migration_003': None, 'migration_004': None}
+    
+    try:
+        print("[MIGRATION] Starting V2 schema migration...", flush=True)
+        
+        # Migration 003: Companies
+        try:
+            from migrations._003_add_companies import upgrade as upgrade_003
+            success = upgrade_003()
+            results['migration_003'] = 'success' if success else 'failed'
+            print(f"[MIGRATION] 003 Companies: {results['migration_003']}", flush=True)
+        except Exception as e:
+            results['migration_003'] = f'error: {str(e)}'
+            print(f"[MIGRATION] 003 error: {e}", flush=True)
+        
+        # Migration 004: Templates/Occurrences
+        try:
+            from migrations._004_refactor_trips_to_templates import upgrade as upgrade_004
+            success = upgrade_004()
+            results['migration_004'] = 'success' if success else 'failed'
+            print(f"[MIGRATION] 004 Templates: {results['migration_004']}", flush=True)
+        except Exception as e:
+            results['migration_004'] = f'error: {str(e)}'
+            print(f"[MIGRATION] 004 error: {e}", flush=True)
+        
+        all_success = all(v == 'success' for v in results.values())
+        return jsonify({
+            'success': all_success,
+            'message': 'V2 migration completed' if all_success else 'Some migrations failed - check results',
+            'results': results
+        }), 200 if all_success else 500
+        
+    except Exception as e:
+        import traceback
+        print(f"[MIGRATION] Error: {traceback.format_exc()}", flush=True)
+        return jsonify({'success': False, 'error': str(e), 'results': results}), 500
+
+
+# ============================================
 # SCHEDULER STATUS ENDPOINT
 # ============================================
 
