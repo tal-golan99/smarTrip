@@ -15,7 +15,6 @@
 
 ## Key Features
 
-- **Explainable Recommendations** - Every trip includes a match score (0-100) and human-readable explanations for why it was recommended
 - **Two-Tier Search Algorithm** - Primary tier applies strict filters; relaxed tier automatically expands criteria when results are sparse
 - **Bilingual Support** - Full Hebrew and English content with RTL layout support
 - **Event Analytics** - Built-in tracking for search behavior, impressions, and user interactions
