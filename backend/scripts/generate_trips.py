@@ -5,7 +5,14 @@ Generate 500 Trips with Proper Constraints
 - More than 1 trip per country
 - Tags correlate with geography and trip type
 - Private Groups have special handling
+
+Run from backend folder: python scripts/generate_trips.py
 """
+
+import sys
+import os
+# Add backend folder to path for imports
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from database import SessionLocal
 from models import Country, Guide, Tag, Trip, TripTag, TripType, TripStatus, Continent

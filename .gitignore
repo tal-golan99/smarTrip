@@ -87,3 +87,6 @@ migrate_*.py
 
 # Personal documentation (not for GitHub)
 /docs/
+
+# Local/generated reports
+migration_report*.html

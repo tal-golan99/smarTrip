@@ -9,15 +9,14 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from database import SessionLocal
-from models import Country, Guide, Tag, Trip, TagCategory
+from models import Country, Guide, Tag, Trip
+# Note: TagCategory enum was removed - Tags now only contain THEME tags
 
 session = SessionLocal()
 
 try:
     countries_count = session.query(Country).count()
     guides_count = session.query(Guide).count()
-    type_tags_count = session.query(Tag).filter(Tag.category == TagCategory.TYPE).count()
-    theme_tags_count = session.query(Tag).filter(Tag.category == TagCategory.THEME).count()
     total_tags_count = session.query(Tag).count()
     trips_count = session.query(Trip).count()
     
@@ -26,19 +25,13 @@ try:
     print("="*50)
     print(f"Countries: {countries_count}")
     print(f"Guides: {guides_count}")
-    print(f"Tags (TYPE): {type_tags_count}")
-    print(f"Tags (THEME): {theme_tags_count}")
     print(f"Total Tags: {total_tags_count}")
     print(f"Trips: {trips_count}")
     print("="*50)
-    print("\nSample TYPE Tags:")
-    type_tags = session.query(Tag).filter(Tag.category == TagCategory.TYPE).limit(5).all()
-    for tag in type_tags:
-        print(f"  - {tag.name} ({tag.name_he})")
     
-    print("\nSample THEME Tags:")
-    theme_tags = session.query(Tag).filter(Tag.category == TagCategory.THEME).limit(5).all()
-    for tag in theme_tags:
+    print("\nSample Tags:")
+    tags = session.query(Tag).limit(5).all()
+    for tag in tags:
         print(f"  - {tag.name} ({tag.name_he})")
     
     print("\nSample Trips:")
@@ -52,4 +45,3 @@ try:
     
 finally:
     session.close()
-

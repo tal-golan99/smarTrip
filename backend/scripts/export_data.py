@@ -2,7 +2,14 @@
 Export Database to CSV Files
 =============================
 Exports all database data to CSV files for consistent seeding across environments.
+
+Run from backend folder: python scripts/export_data.py
 """
+
+import sys
+import os
+# Add backend folder to path for imports
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import csv
 from database import SessionLocal

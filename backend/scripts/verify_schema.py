@@ -10,7 +10,8 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from database import SessionLocal
-from models import Trip, TripType, Country, Tag, TagCategory
+from models import Trip, TripType, Country, Tag
+# Note: TagCategory enum was removed
 from sqlalchemy import func
 
 def verify_schema():
@@ -35,20 +36,13 @@ def verify_schema():
         print()
         
         # ============================================
-        # CHECK 2: Theme Tags (THEME only)
+        # CHECK 2: Tags (All are now theme tags)
         # ============================================
-        print("[CHECK 2] Theme Tags (should be THEME category only)")
-        theme_tags = session.query(Tag).filter(Tag.category == TagCategory.THEME).order_by(Tag.id).all()
-        print(f"Total Theme Tags: {len(theme_tags)}")
-        for tag in theme_tags:
+        print("[CHECK 2] Tags (category column removed - all tags are theme tags)")
+        all_tags = session.query(Tag).order_by(Tag.id).all()
+        print(f"Total Tags: {len(all_tags)}")
+        for tag in all_tags:
             print(f"  ID {tag.id}: {tag.name} ({tag.name_he})")
-        
-        # Check if any TYPE tags still exist (should be 0)
-        type_tags = session.query(Tag).filter(Tag.category == TagCategory.TYPE).count()
-        if type_tags > 0:
-            print(f"\nWARNING: Found {type_tags} TYPE tags (should be 0!)")
-        else:
-            print(f"\nSUCCESS: No TYPE tags found (correct)")
         print()
         
         # ============================================

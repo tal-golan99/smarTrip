@@ -2,12 +2,20 @@
 Database Seed Script - Import from CSV
 =======================================
 Imports consistent data from CSV files for identical seeding across environments.
+
+Run from backend folder: python scripts/seed_from_csv.py
 """
+
+import sys
+import os
+# Add backend folder to path for imports
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import csv
 from datetime import datetime
 from database import SessionLocal, init_db, drop_db
-from models import Country, Guide, Tag, Trip, TripTag, TripType, Continent, Gender, TripStatus, TagCategory
+from models import Country, Guide, Tag, Trip, TripTag, TripType, Continent, Gender, TripStatus
+# Note: TagCategory enum was removed - Tags now only contain THEME tags
 
 def seed_from_csv():
     """Seed database by importing from CSV files"""
@@ -78,8 +86,8 @@ def seed_from_csv():
                     id=int(row['id']),
                     name=row['name'],
                     name_he=row['name_he'],
-                    description=row['description'] if row['description'] else None,
-                    category=TagCategory(row['category'])
+                    description=row['description'] if row['description'] else None
+                    # Note: category column was removed from tags table
                 )
                 session.add(tag)
                 tags_imported += 1

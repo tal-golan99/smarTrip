@@ -3,10 +3,18 @@ Database Seed Script with TripType Foreign Key Logic
 =====================================================
 Populates the database with realistic data using the new TripType model
 and strict Type-to-Country mapping for geographical accuracy.
+
+Run from backend folder: python scripts/seed.py
 """
 
+import sys
+import os
+# Add backend folder to path for imports
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from database import SessionLocal, init_db
-from models import Country, Guide, Tag, Trip, TripTag, TripType, Continent, Gender, TripStatus, TagCategory
+from models import Country, Guide, Tag, Trip, TripTag, TripType, Continent, Gender, TripStatus
+# Note: TagCategory enum was removed - Tags now only contain THEME tags
 from faker import Faker
 from datetime import datetime, timedelta
 import random
@@ -239,7 +247,7 @@ def seed_database():
         for tag_id, name, name_he, description in theme_tags_data:
             existing = session.query(Tag).filter(Tag.id == tag_id).first()
             if not existing:
-                tag = Tag(id=tag_id, name=name, name_he=name_he, description=description, category=TagCategory.THEME)
+                tag = Tag(id=tag_id, name=name, name_he=name_he, description=description)
                 session.add(tag)
             else:
                 # Update existing to ensure correct names
@@ -376,7 +384,7 @@ def seed_database():
         all_countries = session.query(Country).all()
         all_guides = session.query(Guide).filter(Guide.is_active == True).all()
         all_trip_types = session.query(TripType).all()
-        theme_tags = session.query(Tag).filter(Tag.category == TagCategory.THEME).all()
+        theme_tags = session.query(Tag).all()  # All tags are now theme tags
         
         # Build country name lookup
         country_by_name = {c.name: c for c in all_countries}

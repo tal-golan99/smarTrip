@@ -10,7 +10,8 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from datetime import datetime, timedelta
-from app import app, db_session, Trip, Country, TripType, Tag, TripTag, TagCategory, TripStatus
+from app import app, db_session, Trip, Country, TripType, Tag, TripTag, TripStatus
+# Note: TagCategory enum was removed
 from app import SCORING_WEIGHTS, SCORE_THRESHOLDS, RecommendationConfig
 
 def run_analysis():
@@ -22,7 +23,7 @@ def run_analysis():
         # Get database stats
         total_trips = db_session.query(Trip).count()
         total_countries = db_session.query(Country).count()
-        total_themes = db_session.query(Tag).filter(Tag.category == TagCategory.THEME).count()
+        total_themes = db_session.query(Tag).count()  # All tags are now theme tags
         
         print(f'\nDatabase: {total_trips} trips, {total_countries} countries, {total_themes} themes')
         

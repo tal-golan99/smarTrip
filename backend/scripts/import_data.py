@@ -2,11 +2,19 @@
 Import Database from CSV Files
 ===============================
 Imports all database tables from CSV files for consistent deployment.
+
+Run from backend folder: python scripts/import_data.py
 """
+
+import sys
+import os
+# Add backend folder to path for imports
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import csv
 from database import SessionLocal, init_db, drop_db
-from models import Country, Guide, Tag, Trip, TripTag, TripType, Continent, Gender, TripStatus, TagCategory
+from models import Country, Guide, Tag, Trip, TripTag, TripType, Continent, Gender, TripStatus
+# Note: TagCategory enum was removed - Tags now only contain THEME tags
 from datetime import datetime, date
 import os
 
@@ -83,8 +91,8 @@ def import_database():
                     id=int(row['id']),
                     name=row['name'],
                     name_he=row['name_he'],
-                    description=row['description'],
-                    category=TagCategory(row['category'])
+                    description=row['description']
+                    # Note: category column was removed from tags table
                 )
                 tags.append(tag)
             session.bulk_save_objects(tags)
