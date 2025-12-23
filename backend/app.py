@@ -62,7 +62,7 @@ load_dotenv()
 # Raw point accumulation - max possible = 100
 SCORING_WEIGHTS = {
     # Base score for passing hard filters
-    'BASE_SCORE': 35.0,           # All trips that pass filters start here
+    'BASE_SCORE': 25.0,           # All trips that pass filters start here
     'RELAXED_PENALTY': -20.0,     # Penalty for relaxed/expanded results
     
     # Theme matching (user selected theme interests)
@@ -1747,109 +1747,8 @@ def get_evaluation_scenarios():
         }), 500
 
 
-@app.route('/api/migration/logging', methods=['POST'])
-def run_logging_migration():
-    """
-    Run the database migration to create recommendation logging tables.
-    WARNING: This creates new tables. Safe to run multiple times.
-    """
-    try:
-        from migrations import upgrade_logging_tables
-        
-        print("[MIGRATION] Starting logging tables migration...", flush=True)
-        success = upgrade_logging_tables()
-        
-        if success:
-            return jsonify({
-                'success': True,
-                'message': 'Logging tables migration completed successfully'
-            }), 200
-        else:
-            return jsonify({
-                'success': False,
-                'error': 'Migration failed - check logs'
-            }), 500
-    
-    except ImportError:
-        # Fallback: run migration directly
-        try:
-            import sys
-            import os
-            sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'migrations'))
-            
-            from migrations import _001_add_recommendation_logging as migration
-            success = migration.upgrade()
-            
-            return jsonify({
-                'success': True,
-                'message': 'Logging tables migration completed successfully'
-            }), 200
-        except Exception as e2:
-            return jsonify({
-                'success': False,
-                'error': f'Migration not available: {str(e2)}'
-            }), 500
-    
-    except Exception as e:
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
-
-
-@app.route('/api/migration/user-tracking', methods=['POST'])
-def run_user_tracking_migration():
-    """
-    Run the Phase 1 database migration to create user tracking tables.
-    Creates: users, sessions, events, trip_interactions tables.
-    WARNING: Safe to run multiple times (checks for existing tables).
-    """
-    try:
-        from migrations import upgrade_user_tracking
-        
-        print("[MIGRATION] Starting user tracking tables migration (Phase 1)...", flush=True)
-        success = upgrade_user_tracking()
-        
-        if success:
-            return jsonify({
-                'success': True,
-                'message': 'User tracking tables migration completed successfully'
-            }), 200
-        else:
-            return jsonify({
-                'success': False,
-                'error': 'Migration failed - check logs'
-            }), 500
-    
-    except ImportError:
-        # Fallback: run migration directly
-        try:
-            import sys
-            import os
-            sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'migrations'))
-            
-            from migrations import _002_add_user_tracking as migration
-            success = migration.upgrade()
-            
-            return jsonify({
-                'success': True,
-                'message': 'User tracking tables migration completed successfully'
-            }), 200
-        except Exception as e2:
-            return jsonify({
-                'success': False,
-                'error': f'Migration not available: {str(e2)}'
-            }), 500
-    
-    except Exception as e:
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
-
-
 # ============================================
-# AUTO-MIGRATION AND AUTO-SEED
+# AUTO-SEED (if database is empty)
 # ============================================
 
 def auto_seed_if_empty():
@@ -1867,55 +1766,6 @@ def auto_seed_if_empty():
         print(f"[AUTO-SEED] Auto-seed check failed: {e}")
         # Don't crash the app if seeding fails
         pass
-
-
-# ============================================
-# V2 SCHEMA MIGRATION ENDPOINT
-# ============================================
-
-@app.route('/api/migration/v2-schema', methods=['POST'])
-def run_v2_schema_migration():
-    """
-    Run V2 schema migration (companies + templates/occurrences).
-    Call via: POST https://your-backend.onrender.com/api/migration/v2-schema
-    Safe to run multiple times.
-    """
-    results = {'migration_003': None, 'migration_004': None}
-    
-    try:
-        print("[MIGRATION] Starting V2 schema migration...", flush=True)
-        
-        # Migration 003: Companies
-        try:
-            from migrations._003_add_companies import upgrade as upgrade_003
-            success = upgrade_003()
-            results['migration_003'] = 'success' if success else 'failed'
-            print(f"[MIGRATION] 003 Companies: {results['migration_003']}", flush=True)
-        except Exception as e:
-            results['migration_003'] = f'error: {str(e)}'
-            print(f"[MIGRATION] 003 error: {e}", flush=True)
-        
-        # Migration 004: Templates/Occurrences
-        try:
-            from migrations._004_refactor_trips_to_templates import upgrade as upgrade_004
-            success = upgrade_004()
-            results['migration_004'] = 'success' if success else 'failed'
-            print(f"[MIGRATION] 004 Templates: {results['migration_004']}", flush=True)
-        except Exception as e:
-            results['migration_004'] = f'error: {str(e)}'
-            print(f"[MIGRATION] 004 error: {e}", flush=True)
-        
-        all_success = all(v == 'success' for v in results.values())
-        return jsonify({
-            'success': all_success,
-            'message': 'V2 migration completed' if all_success else 'Some migrations failed - check results',
-            'results': results
-        }), 200 if all_success else 500
-        
-    except Exception as e:
-        import traceback
-        print(f"[MIGRATION] Error: {traceback.format_exc()}", flush=True)
-        return jsonify({'success': False, 'error': str(e), 'results': results}), 500
 
 
 # ============================================

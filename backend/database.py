@@ -15,9 +15,13 @@ load_dotenv()
 # Default to SQLite for local development if no DATABASE_URL is set
 DATABASE_URL = os.getenv('DATABASE_URL', 'sqlite:///./smarttrip.db')
 
-# Render uses postgres:// but SQLAlchemy requires postgresql://
+# Some providers use postgres:// but SQLAlchemy requires postgresql://
 if DATABASE_URL.startswith('postgres://'):
     DATABASE_URL = DATABASE_URL.replace('postgres://', 'postgresql://', 1)
+
+# Ensure SSL mode for cloud databases (Supabase, etc.)
+if 'supabase' in DATABASE_URL and 'sslmode' not in DATABASE_URL:
+    DATABASE_URL = DATABASE_URL + ('&' if '?' in DATABASE_URL else '?') + 'sslmode=require'
 
 # Create engine
 engine = create_engine(
