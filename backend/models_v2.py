@@ -457,6 +457,8 @@ class TripOccurrence(Base):
         CheckConstraint('spots_left >= 0', name='ck_spots_left_positive'),
         Index('ix_trip_occurrences_dates', 'start_date', 'end_date'),
         Index('ix_trip_occurrences_template_dates', 'trip_template_id', 'start_date'),
+        Index('ix_trip_occurrences_status_spots', 'status', 'spots_left'),  # For filtering available trips
+        Index('ix_trip_occurrences_start_status', 'start_date', 'status'),  # For date + status filters
     )
     
     def __repr__(self):

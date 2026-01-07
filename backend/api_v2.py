@@ -606,7 +606,9 @@ def get_recommendations_v2():
             TripOccurrence.start_date >= today
         ).count()
         
-        # Build query
+        # Build query with optimized eager loading
+        # Use joinedload for many-to-one (occurrence -> template) and one-to-one relationships
+        # Use selectinload for one-to-many (template -> tags) to avoid cartesian products
         query = db_session.query(TripOccurrence).options(
             joinedload(TripOccurrence.template).joinedload(TripTemplate.company),
             joinedload(TripOccurrence.template).joinedload(TripTemplate.trip_type),
@@ -669,8 +671,12 @@ def get_recommendations_v2():
             max_price = budget * config.BUDGET_MAX_MULTIPLIER
             query = query.filter(TripOccurrence.effective_price <= max_price)
         
-        # Get candidates
+        # Get all candidates for scoring (don't limit - need to score all to find best matches)
+        # Order by start_date to help with query optimization
+        query = query.order_by(TripOccurrence.start_date.asc())
         candidates = query.all()
+        
+        print(f"[V2] Loaded {len(candidates)} candidates for scoring", flush=True)
         
         # Score candidates
         scored_trips = []
@@ -916,9 +922,11 @@ def get_recommendations_v2():
             # Exclude already included trips
             relaxed_query = relaxed_query.filter(~TripOccurrence.id.in_(included_ids))
             
-            # Get relaxed candidates
+            # Get all relaxed candidates for scoring (don't limit - need to score all)
+            relaxed_query = relaxed_query.order_by(TripOccurrence.start_date.asc())
             relaxed_candidates = relaxed_query.all()
-            print(f"[V2 RELAXED] Found {len(relaxed_candidates)} relaxed candidates", flush=True)
+            
+            print(f"[V2 RELAXED] Loaded {len(relaxed_candidates)} relaxed candidates for scoring", flush=True)
             
             # ========================================
             # SCORE RELAXED TRIPS (Full V1 Parity)

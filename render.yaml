@@ -13,5 +13,7 @@ services:
       - key: DATABASE_URL
         sync: false  # Set in Render dashboard (Supabase connection string)
       - key: ALLOWED_ORIGINS
-        sync: false  # Set in Render dashboard (your Vercel URL)
+        sync: false  # Set in Render dashboard (your Vercel URL, e.g., https://your-app.vercel.app)
+      - key: SUPABASE_JWT_SECRET
+        sync: false  # Set in Render dashboard (from Supabase Settings → API → JWT Settings)
 

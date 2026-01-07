@@ -140,8 +140,16 @@ npm install
 Create `.env.local`:
 
 ```env
+# Backend API URL (required)
 NEXT_PUBLIC_API_URL=http://localhost:5000
+
+# Supabase Authentication (optional - app works without it in guest mode)
+# Get these from: https://app.supabase.com → Your Project → Settings → API
+NEXT_PUBLIC_SUPABASE_URL=https://your-project-id.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key-here
 ```
+
+**Note:** If you don't set the Supabase variables, the app will work in guest mode (users can continue without signing in).
 
 Start development server:
 

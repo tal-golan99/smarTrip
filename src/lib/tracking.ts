@@ -303,12 +303,27 @@ async function flushEvents(): Promise<void> {
   const anonymousId = getAnonymousId();
   const sessionId = getSessionId();
   
+  // Get Supabase user info if authenticated (optional)
+  // Skip this during page unload to prevent blocking
+  let userEmail: string | undefined;
+  if (typeof window !== 'undefined' && document.visibilityState !== 'hidden') {
+    try {
+      const { getCurrentUser } = await import('./supabaseClient');
+      const user = await getCurrentUser();
+      userEmail = user?.email || undefined;
+    } catch (error) {
+      // Supabase not available or not configured - continue as guest
+      // Silently fail - don't log to avoid console spam
+    }
+  }
+  
   // Add identity to each event
   const payload = {
     events: eventsToSend.map(event => ({
       ...event,
       anonymous_id: anonymousId,
       session_id: sessionId,
+      ...(userEmail ? { email: userEmail } : {}),  // Include email if authenticated
     })),
   };
   
@@ -339,6 +354,9 @@ async function flushEvents(): Promise<void> {
 /**
  * Flush pending events (call before page unload).
  * Uses sendBeacon for reliable delivery.
+ * 
+ * Note: This function cannot be async because it's called during page unload.
+ * We'll get user email synchronously if available from session storage.
  */
 export function flushPendingEvents(): void {
   if (eventQueue.length === 0) {
@@ -350,11 +368,26 @@ export function flushPendingEvents(): void {
     const anonymousId = getAnonymousId();
     const sessionId = getSessionId();
     
+    // Try to get user email from session storage (set by auth system)
+    // This is a synchronous fallback since we can't await during page unload
+    let userEmail: string | undefined;
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        // Supabase stores session in localStorage, but we can't easily extract email
+        // For now, we'll send without email during page unload
+        // The regular flushEvents() will include email when called normally
+      }
+    } catch (error) {
+      // Ignore errors during unload
+    }
+    
     const payload = JSON.stringify({
       events: eventQueue.map(event => ({
         ...event,
         anonymous_id: anonymousId,
         session_id: sessionId,
+        // Note: Email not included during page unload (would require async)
+        // Regular flushEvents() includes email when called normally
       })),
     });
     

@@ -1,18 +1,158 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import Image from 'next/image';
-import { Sparkles, Star, Users, Globe, CheckCircle, MapPin, Sliders, Ship, Train, Camera, Mountain, PawPrint, Users2, Drama } from 'lucide-react';
+import { Sparkles, Star, Users, Globe, CheckCircle, MapPin, Sliders, Ship, Train, Camera, Mountain, PawPrint, Users2, Drama, LogOut } from 'lucide-react';
+import { getCurrentUser, supabase, isAuthAvailable } from '@/lib/supabaseClient';
 
 export default function Home() {
   const router = useRouter();
+  const [userName, setUserName] = useState<string | null>(null);
+  const [isLoadingUser, setIsLoadingUser] = useState(true);
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
-  const handleStartJourney = () => {
-    router.push('/search');
+  // Load user name on mount
+  useEffect(() => {
+    const loadUser = async () => {
+      if (!isAuthAvailable() || !supabase) {
+        setIsLoadingUser(false);
+        return;
+      }
+      
+      try {
+        const user = await getCurrentUser();
+        if (user) {
+          const metadata = user.user_metadata || {};
+          const fullName = metadata.full_name || 
+                          metadata.name ||
+                          (metadata.first_name && metadata.last_name 
+                            ? `${metadata.first_name} ${metadata.last_name}` 
+                            : metadata.first_name || metadata.last_name) ||
+                          user.email?.split('@')[0] || 
+                          null;
+          setUserName(fullName);
+        } else {
+          setUserName(null);
+        }
+      } catch (error) {
+        console.error('[Home] Error loading user:', error);
+        setUserName(null);
+      } finally {
+        setIsLoadingUser(false);
+      }
+    };
+    
+    loadUser();
+    
+    // Listen for auth state changes
+    if (supabase) {
+      const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+        if (session?.user) {
+          loadUser();
+        } else {
+          setUserName(null);
+          setIsLoadingUser(false);
+        }
+      });
+      
+      return () => {
+        subscription.unsubscribe();
+      };
+    }
+  }, []);
+
+  // Show logout confirmation dialog
+  const handleLogout = () => {
+    setShowLogoutConfirm(true);
+  };
+
+  // Confirm logout
+  const confirmLogout = async () => {
+    if (!isAuthAvailable() || !supabase) {
+      return;
+    }
+    
+    try {
+      await supabase.auth.signOut();
+      setUserName(null);
+      setShowLogoutConfirm(false);
+      router.push('/auth?redirect=/search');
+    } catch (error) {
+      console.error('[Home] Error logging out:', error);
+      setShowLogoutConfirm(false);
+    }
+  };
+
+  // Cancel logout
+  const cancelLogout = () => {
+    setShowLogoutConfirm(false);
+  };
+
+  const handleStartJourney = async (e: React.MouseEvent<HTMLButtonElement | HTMLAnchorElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    console.log('[Home] Button clicked, navigating...');
+    
+    // If user is already logged in, go directly to search
+    if (isAuthAvailable() && supabase) {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session) {
+          router.push('/search');
+          return;
+        }
+      } catch (error) {
+        console.error('[Home] Error checking session:', error);
+      }
+    }
+    
+    // Otherwise, go to auth page
+    window.location.href = '/auth?redirect=/search';
   };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#076839] via-[#0ba55c] to-[#12acbe] flex items-center justify-center px-4 py-8 md:p-4 relative overflow-hidden">
+      {/* Logout Confirmation Dialog */}
+      {showLogoutConfirm && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-2xl shadow-2xl p-6 md:p-8 max-w-md w-full mx-4">
+            <h3 className="text-xl md:text-2xl font-bold text-gray-800 mb-4 text-center">
+              האם ברצונך להתנתק מהמערכת?
+            </h3>
+            <div className="flex gap-4 justify-center">
+              <button
+                onClick={confirmLogout}
+                className="px-6 py-3 bg-[#076839] text-white rounded-lg font-semibold hover:bg-[#065a2e] transition-colors"
+                type="button"
+              >
+                כן
+              </button>
+              <button
+                onClick={cancelLogout}
+                className="px-6 py-3 bg-gray-200 text-gray-800 rounded-lg font-semibold hover:bg-gray-300 transition-colors"
+                type="button"
+              >
+                לא
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Logout Button - Top Right */}
+      {isAuthAvailable() && userName && (
+        <button
+          onClick={handleLogout}
+          className="absolute top-4 right-4 flex items-center gap-2 px-3 py-2 bg-white/10 hover:bg-white/20 rounded-lg transition-all duration-200 group z-40"
+          title="התנתק"
+          type="button"
+        >
+          <LogOut className="w-5 h-5 group-hover:scale-110 transition-transform" />
+        </button>
+      )}
+
       {/* Decorative background elements - Optimized */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div className="absolute top-20 left-10 w-72 h-72 bg-white/5 rounded-full blur-2xl transform-gpu"></div>
@@ -21,7 +161,7 @@ export default function Home() {
       </div>
 
       {/* Main content */}
-      <div className="text-center z-10 max-w-4xl mx-auto w-full">
+      <div className="text-center z-10 max-w-4xl mx-auto w-full relative">
         {/* Logo */}
         <div className="mb-4 md:mb-8 animate-fade-in">
           <Image 
@@ -45,13 +185,15 @@ export default function Home() {
         </h2>
 
         {/* Call to Action Button */}
-        <div className="animate-fade-in-up px-4" style={{ animationDelay: '0.6s' }}>
-          <button
+        <div className="animate-fade-in-up px-4 relative z-20" style={{ animationDelay: '0.6s' }}>
+          <Link
+            href="/auth?redirect=/search"
             onClick={handleStartJourney}
-            className="relative inline-flex items-center justify-center px-8 py-4 md:px-12 md:py-5 bg-white text-[#076839] rounded-2xl font-bold text-lg md:text-xl lg:text-2xl shadow-2xl hover:shadow-[0_20px_60px_rgba(255,255,255,0.5)] transition-all duration-300 hover:scale-105 active:scale-95 w-full max-w-md transform-gpu"
+            className="relative inline-flex items-center justify-center px-8 py-4 md:px-12 md:py-5 bg-white text-[#076839] rounded-2xl font-bold text-lg md:text-xl lg:text-2xl shadow-2xl hover:shadow-[0_20px_60px_rgba(255,255,255,0.5)] transition-all duration-300 hover:scale-105 active:scale-95 w-full max-w-md transform-gpu cursor-pointer no-underline"
+            style={{ position: 'relative', zIndex: 30, pointerEvents: 'auto', display: 'inline-flex' }}
           >
             בוא נגלה לאן טסים
-          </button>
+          </Link>
         </div>
 
         {/* Social Proof / Trust Indicators */}
@@ -172,13 +314,15 @@ export default function Home() {
         </div>
 
         {/* Second CTA - Bottom of Page */}
-        <div className="mt-12 md:mt-20 text-center animate-fade-in-up px-4" style={{ animationDelay: '1.6s' }}>
-          <button
+        <div className="mt-12 md:mt-20 text-center animate-fade-in-up px-4 relative z-20" style={{ animationDelay: '1.6s' }}>
+          <Link
+            href="/auth?redirect=/search"
             onClick={handleStartJourney}
-            className="relative inline-flex items-center justify-center px-8 py-4 md:px-12 md:py-5 bg-white text-[#076839] rounded-2xl font-bold text-lg md:text-xl lg:text-2xl shadow-2xl hover:shadow-[0_20px_60px_rgba(255,255,255,0.5)] transition-all duration-300 hover:scale-105 active:scale-95 w-full max-w-md transform-gpu"
+            className="relative inline-flex items-center justify-center px-8 py-4 md:px-12 md:py-5 bg-white text-[#076839] rounded-2xl font-bold text-lg md:text-xl lg:text-2xl shadow-2xl hover:shadow-[0_20px_60px_rgba(255,255,255,0.5)] transition-all duration-300 hover:scale-105 active:scale-95 w-full max-w-md transform-gpu cursor-pointer no-underline"
+            style={{ position: 'relative', zIndex: 30, pointerEvents: 'auto', display: 'inline-flex' }}
           >
             בוא נגלה לאן טסים
-          </button>
+          </Link>
         </div>
 
         {/* Footer */}

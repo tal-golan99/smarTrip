@@ -7,6 +7,11 @@
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
 
+// Warn if using localhost in production
+if (typeof window !== 'undefined' && API_BASE_URL.includes('localhost') && process.env.NODE_ENV === 'production') {
+  console.error('[API] WARNING: Using localhost API URL in production! Set NEXT_PUBLIC_API_URL in Vercel.');
+}
+
 // Use V2 API endpoints
 const API_VERSION = '/api/v2';
 
@@ -24,16 +29,50 @@ interface ApiResponse<T = any> {
 }
 
 /**
- * Generic API fetch wrapper with error handling
+ * Get authentication headers (includes Supabase JWT if user is logged in)
+ */
+async function getAuthHeaders(): Promise<Record<string, string>> {
+  try {
+    // Only try to get auth token if we're in the browser (client-side)
+    if (typeof window === 'undefined') {
+      return {}; // Server-side rendering - no auth
+    }
+    
+    // Dynamically import to avoid SSR issues
+    const { getAccessToken } = await import('./supabaseClient');
+    const token = await getAccessToken();
+    
+    if (token) {
+      return {
+        'Authorization': `Bearer ${token}`,
+      };
+    }
+  } catch (error) {
+    // Supabase not configured or not available - continue without auth
+    // Don't log warnings for missing Supabase config (it's optional)
+    if (error instanceof Error && !error.message.includes('Supabase not configured')) {
+      console.warn('[API] Could not get auth token:', error);
+    }
+  }
+  
+  return {};
+}
+
+/**
+ * Generic API fetch wrapper with error handling and authentication
  */
 async function apiFetch<T>(
   endpoint: string,
   options?: RequestInit
 ): Promise<ApiResponse<T>> {
   try {
+    // Get auth headers (if user is logged in)
+    const authHeaders = await getAuthHeaders();
+    
     const response = await fetch(`${API_BASE_URL}${endpoint}`, {
       headers: {
         'Content-Type': 'application/json',
+        ...authHeaders,
         ...options?.headers,
       },
       ...options,

@@ -58,7 +58,7 @@ class TestTripsAPIEndpoints:
         
         assert response.status_code == 200
         data = response.get_json()
-        
+    
         assert len(data['data']) <= 5
     
     @pytest.mark.api
@@ -145,7 +145,7 @@ class TestTripsAPIEndpoints:
             # All returned trips should have the specified country
             for trip in data['data']:
                 if 'country' in trip and trip['country']:
-                    assert trip['country']['id'] == country_id
+                assert trip['country']['id'] == country_id
     
     @pytest.mark.api
     def test_get_trips_filter_by_continent(self, client):

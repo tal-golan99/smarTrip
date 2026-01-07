@@ -300,48 +300,55 @@ function SearchResultsPageContent() {
       setIsLoading(true);
       setError(null);
 
+      // Build preferences from URL params
+      const countries = searchParams.get('countries')?.split(',').map(Number).filter(Boolean) || [];
+      const continents = searchParams.get('continents')?.split(',').filter(Boolean) || [];
+      const type = searchParams.get('type');
+      const themes = searchParams.get('themes')?.split(',').map(Number).filter(Boolean) || [];
+      const year = searchParams.get('year');
+      const month = searchParams.get('month');
+      const minDuration = Number(searchParams.get('minDuration')) || 5;
+      const maxDuration = Number(searchParams.get('maxDuration')) || 30;
+      const budget = Number(searchParams.get('budget')) || 15000;
+      const difficulty = Number(searchParams.get('difficulty')) || 2;
+
+      const preferences = {
+        selected_countries: countries,
+        selected_continents: continents,
+        preferred_type_id: type ? Number(type) : undefined,
+        preferred_theme_ids: themes,
+        min_duration: minDuration,
+        max_duration: maxDuration,
+        budget: budget,
+        difficulty: difficulty,
+        // Send year and month as separate hard filters
+        year: year || 'all',
+        month: month || 'all',
+      };
+
+      // Log the API URL being used (for debugging)
+      // V2 API: Uses templates + occurrences schema
+      console.log('Fetching recommendations from:', `${API_URL}/api/v2/recommendations`);
+      console.log('Request preferences:', preferences);
+
+      // Phase 1: Track response time
+      const startTime = Date.now();
+
+      // Add timeout to prevent hanging (30 seconds max)
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000);
+
       try {
-        // Build preferences from URL params
-        const countries = searchParams.get('countries')?.split(',').map(Number).filter(Boolean) || [];
-        const continents = searchParams.get('continents')?.split(',').filter(Boolean) || [];
-        const type = searchParams.get('type');
-        const themes = searchParams.get('themes')?.split(',').map(Number).filter(Boolean) || [];
-        const year = searchParams.get('year');
-        const month = searchParams.get('month');
-        const minDuration = Number(searchParams.get('minDuration')) || 7;
-        const maxDuration = Number(searchParams.get('maxDuration')) || 21;
-        const budget = Number(searchParams.get('budget')) || 5000;
-        const difficulty = Number(searchParams.get('difficulty')) || 2;
-
-        const preferences = {
-          selected_countries: countries,
-          selected_continents: continents,
-          preferred_type_id: type ? Number(type) : undefined,
-          preferred_theme_ids: themes,
-          min_duration: minDuration,
-          max_duration: maxDuration,
-          budget: budget,
-          difficulty: difficulty,
-          // Send year and month as separate hard filters
-          year: year || 'all',
-          month: month || 'all',
-        };
-
-        // Log the API URL being used (for debugging)
-        // V2 API: Uses templates + occurrences schema
-        console.log('Fetching recommendations from:', `${API_URL}/api/v2/recommendations`);
-        console.log('Request preferences:', preferences);
-
-        // Phase 1: Track response time
-        const startTime = Date.now();
-
         const response = await fetch(`${API_URL}/api/v2/recommendations`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify(preferences),
+          signal: controller.signal,
         });
+        
+        clearTimeout(timeoutId);
 
         // Phase 1: Calculate response time
         const endTime = Date.now();
@@ -374,10 +381,16 @@ function SearchResultsPageContent() {
           setScoreThresholds(data.score_thresholds);
         }
         setShowRefinementMessage(data.show_refinement_message || false);
-      } catch (err) {
-        console.error('Search failed:', err);
-        console.error('Attempted to fetch from:', `${API_URL}/api/v2/recommendations`);
-        setError('שגיאה בטעינת התוצאות. אנא נסה שוב.');
+      } catch (fetchErr: any) {
+        clearTimeout(timeoutId);
+        if (fetchErr.name === 'AbortError') {
+          console.error('Search request timed out after 30 seconds');
+          setError('הבקשה ארכה יותר מדי זמן. אנא נסה שוב או נסה עם פחות מסננים.');
+        } else {
+          console.error('Search failed:', fetchErr);
+          console.error('Attempted to fetch from:', `${API_URL}/api/v2/recommendations`);
+          setError('שגיאה בטעינת התוצאות. אנא נסה שוב.');
+        }
       } finally {
         setIsLoading(false);
       }

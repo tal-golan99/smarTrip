@@ -172,14 +172,16 @@ class EventService:
     def get_or_create_user(
         self,
         anonymous_id: str,
-        email: Optional[str] = None
+        email: Optional[str] = None,
+        supabase_user_id: Optional[str] = None
     ) -> User:
         """
-        Get existing user or create new anonymous user.
+        Get existing user or create new anonymous/registered user.
         
         Args:
             anonymous_id: Client-generated UUID from localStorage
             email: Optional email if user is registered
+            supabase_user_id: Optional Supabase user ID (from JWT 'sub' claim)
             
         Returns:
             User object (detached from DB session)
@@ -189,40 +191,66 @@ class EventService:
             # Convert string to UUID
             anon_uuid = UUID(anonymous_id) if isinstance(anonymous_id, str) else anonymous_id
             
-            # Try to find by anonymous_id
+            # Priority 1: Find by Supabase user ID (if authenticated)
+            if supabase_user_id:
+                try:
+                    supabase_uuid = UUID(supabase_user_id) if isinstance(supabase_user_id, str) else supabase_user_id
+                    # Note: We'll store Supabase user ID in email field for now
+                    # In a production system, you might add a separate supabase_user_id column
+                    # For now, we use email as the unique identifier for registered users
+                    if email:
+                        user = db.query(User).filter(User.email == email).first()
+                        if user:
+                            # Link anonymous_id if different
+                            if user.anonymous_id != anon_uuid:
+                                user.anonymous_id = anon_uuid
+                            user.is_registered = True
+                            user.last_seen_at = datetime.utcnow()
+                            db.commit()
+                            db.refresh(user)
+                            db.expunge(user)
+                            return user
+                except (ValueError, TypeError):
+                    pass  # Invalid UUID format, continue with other methods
+            
+            # Priority 2: Try to find by anonymous_id
             user = db.query(User).filter(User.anonymous_id == anon_uuid).first()
             
             if user:
-                # Update last_seen
+                # If we have Supabase auth info, upgrade this user
+                if supabase_user_id and email:
+                    user.email = email
+                    user.is_registered = True
                 user.last_seen_at = datetime.utcnow()
                 db.commit()
                 db.refresh(user)
-                # Expunge to detach from session but keep attributes
                 db.expunge(user)
                 return user
             
-            # Try to find by email if provided
+            # Priority 3: Try to find by email if provided
             if email:
                 user = db.query(User).filter(User.email == email).first()
                 if user:
+                    # Link anonymous_id if different
+                    if user.anonymous_id != anon_uuid:
+                        user.anonymous_id = anon_uuid
+                    user.is_registered = True
                     user.last_seen_at = datetime.utcnow()
                     db.commit()
                     db.refresh(user)
-                    # Expunge to detach from session but keep attributes
                     db.expunge(user)
                     return user
             
-            # Create new anonymous user
+            # Create new user (anonymous or registered)
             user = User(
                 anonymous_id=anon_uuid,
                 email=email,
-                is_registered=email is not None
+                is_registered=(email is not None and supabase_user_id is not None)
             )
             db.add(user)
             db.commit()
             db.refresh(user)
             
-            # Expunge to detach from session but keep attributes
             db.expunge(user)
             return user
             

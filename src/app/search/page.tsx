@@ -7,7 +7,7 @@ import {
   Search, X, ChevronDown, MapPin, Calendar, DollarSign, 
   TrendingUp, Compass, Ship, Camera, Mountain, Palmtree,
   Plane, Train, Users, Users2, Snowflake, Car, Sparkles, Globe,
-  Utensils, Landmark, TreePine, Waves, Sun, PawPrint, Loader2, Home
+  Utensils, Landmark, TreePine, Waves, Sun, PawPrint, Loader2, Home, LogOut
 } from 'lucide-react';
 import clsx from 'clsx';
 
@@ -19,8 +19,20 @@ import {
   flushPendingEvents,
 } from '@/lib/useTracking';
 
+// Supabase auth imports
+import { getCurrentUser, supabase, isAuthAvailable } from '@/lib/supabaseClient';
+
 // API URL from environment variable
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+
+// Log API URL on module load for debugging (only in browser)
+if (typeof window !== 'undefined') {
+  console.log('[SearchPage] API_URL:', API_URL);
+  // Warn if still using localhost in production
+  if (API_URL.includes('localhost') && process.env.NODE_ENV === 'production') {
+    console.error('[SearchPage] WARNING: Using localhost API URL in production! Set NEXT_PUBLIC_API_URL in Vercel.');
+  }
+}
 
 // ============================================
 // TYPES
@@ -474,8 +486,91 @@ function SearchPageContent() {
   // Available months based on selected year
   const availableMonths = useMemo(() => getAvailableMonths(selectedYear), [selectedYear]);
   
-  // Phase 1: Track page view
+  // User authentication state
+  const [userName, setUserName] = useState<string | null>(null);
+  const [isLoadingUser, setIsLoadingUser] = useState(true);
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  
+  // Phase 1: Track page view (non-blocking)
   usePageView('search');
+  
+  // Load user name on mount and listen for auth changes
+  useEffect(() => {
+    const loadUser = async () => {
+      if (!isAuthAvailable() || !supabase) {
+        setIsLoadingUser(false);
+        return;
+      }
+      
+      try {
+        const user = await getCurrentUser();
+        if (user) {
+          // Try to get full name from user metadata or email
+          const metadata = user.user_metadata || {};
+          const fullName = metadata.full_name || 
+                          metadata.name ||
+                          (metadata.first_name && metadata.last_name 
+                            ? `${metadata.first_name} ${metadata.last_name}` 
+                            : metadata.first_name || metadata.last_name) ||
+                          user.email?.split('@')[0] || 
+                          null;
+          setUserName(fullName);
+        } else {
+          setUserName(null);
+        }
+      } catch (error) {
+        console.error('[SearchPage] Error loading user:', error);
+        setUserName(null);
+      } finally {
+        setIsLoadingUser(false);
+      }
+    };
+    
+    loadUser();
+    
+    // Listen for auth state changes
+    if (supabase) {
+      const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+        if (session?.user) {
+          loadUser();
+        } else {
+          setUserName(null);
+          setIsLoadingUser(false);
+        }
+      });
+      
+      return () => {
+        subscription.unsubscribe();
+      };
+    }
+  }, []);
+  
+  // Show logout confirmation dialog
+  const handleLogout = () => {
+    setShowLogoutConfirm(true);
+  };
+
+  // Confirm logout
+  const confirmLogout = async () => {
+    if (!isAuthAvailable() || !supabase) {
+      return;
+    }
+    
+    try {
+      await supabase.auth.signOut();
+      setUserName(null);
+      setShowLogoutConfirm(false);
+      router.push('/auth?redirect=/search');
+    } catch (error) {
+      console.error('[SearchPage] Error logging out:', error);
+      setShowLogoutConfirm(false);
+    }
+  };
+
+  // Cancel logout
+  const cancelLogout = () => {
+    setShowLogoutConfirm(false);
+  };
   
   // Phase 1: Track filter changes/removals
   // Create a memoized filters object to track changes
@@ -510,75 +605,67 @@ function SearchPageContent() {
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'instant' });
   }, []);
-
-  // Helper to detect cold start errors
-  const detectColdStart = (error: any): boolean => {
-    const errorMessage = error?.message?.toLowerCase() || '';
-    const errorName = error?.name?.toLowerCase() || '';
-    
-    return (
-      errorMessage.includes('failed to fetch') ||
-      errorMessage.includes('networkerror') ||
-      errorMessage.includes('timeout') ||
-      errorMessage.includes('econnrefused') ||
-      errorName === 'typeerror'
-    );
-  };
-
   // Fetch countries from API - callable for retry
   const fetchCountries = useCallback(async () => {
     setIsLoadingCountries(true);
     setCountriesError(false);
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 60000); // 60s timeout for cold starts
+      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout (reduced from 60s)
+      
+      console.log('[SearchPage] Fetching countries from:', `${API_URL}/api/locations`);
       
       const response = await fetch(`${API_URL}/api/locations`, {
-        signal: controller.signal
+        signal: controller.signal,
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        mode: 'cors',
+        credentials: 'omit',
       });
       clearTimeout(timeoutId);
       
-      if (response.ok) {
-        const data = await response.json();
-        if (data.countries && data.countries.length > 0) {
-          // Map API response to our Country interface
-          const mappedCountries: Country[] = data.countries.map((c: any) => ({
-            id: c.id,
-            name: c.name,
-            nameHe: c.name_he || c.nameHe || c.name,
-            continent: c.continent
-          }));
-          setCountries(mappedCountries);
-          setIsColdStart(false); // Clear cold start flag on success
-          setRetryAttempt(0);
-        } else {
-          setCountriesError(true);
-        }
-      } else {
-        setCountriesError(true);
-      }
-    } catch (error) {
-      console.error('Failed to fetch countries from API:', error);
+      console.log('[SearchPage] Countries response status:', response.status);
       
-      // Detect if this is likely a cold start
-      if (detectColdStart(error)) {
-        setIsColdStart(true);
+      if (!response.ok) {
+        const errorText = await response.text().catch(() => 'Unknown error');
+        console.error('[SearchPage] Countries API error:', response.status, response.statusText);
+        console.error('[SearchPage] Error response:', errorText);
         setCountriesError(true);
-        
-        // Auto-retry once after 8 seconds for cold starts
-        if (retryAttempt === 0) {
-          console.log('[SearchPage] Cold start detected, auto-retrying in 8s...');
-          setRetryAttempt(1);
-          setTimeout(() => {
-            fetchCountries();
-            fetchTypesAndTags();
-          }, 8000);
-        }
+        setIsLoadingCountries(false);
+        return;
+      }
+      
+      const data = await response.json();
+      console.log('[SearchPage] Countries data received:', data.countries?.length || 0, 'countries');
+      
+      if (data.countries && data.countries.length > 0) {
+        const mappedCountries: Country[] = data.countries.map((c: any) => ({
+          id: c.id,
+          name: c.name,
+          nameHe: c.name_he || c.nameHe || c.name,
+          continent: c.continent
+        }));
+        setCountries(mappedCountries);
+        setIsColdStart(false);
+        setRetryAttempt(0);
       } else {
+        console.error('[SearchPage] No countries in response. Response data:', data);
         setCountriesError(true);
       }
-    } finally {
+    } catch (error: any) {
+      console.error('[SearchPage] Failed to fetch countries from API:', error);
+      console.error('[SearchPage] Error details:', {
+        name: error?.name,
+        message: error?.message,
+        type: error?.constructor?.name
+      });
+      
+      setCountriesError(true);
       setIsLoadingCountries(false);
+      
+      // Don't auto-retry - let user decide
     }
   }, [retryAttempt]);
 
@@ -588,65 +675,106 @@ function SearchPageContent() {
     setTypesError(false);
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 60000); // 60s timeout
+      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout (reduced from 60s)
+      
+      console.log('[SearchPage] Fetching trip types from:', `${API_URL}/api/trip-types`);
       
       // Fetch trip types
       const typesResponse = await fetch(`${API_URL}/api/trip-types`, {
-        signal: controller.signal
+        signal: controller.signal,
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        mode: 'cors',
+        credentials: 'omit',
       });
       clearTimeout(timeoutId);
       
-      if (typesResponse.ok) {
-        const typesData = await typesResponse.json();
-        if (typesData.data && typesData.data.length > 0) {
-          const mappedTypes: Tag[] = typesData.data.map((t: any) => ({
-            id: t.id,
-            name: t.name,
-            nameHe: t.name_he || t.nameHe || t.name,
-            category: 'Type'
-          }));
-          setTripTypes(mappedTypes);
-        }
+      console.log('[SearchPage] Trip types response status:', typesResponse.status);
+      
+      if (!typesResponse.ok) {
+        const errorText = await typesResponse.text().catch(() => 'Unknown error');
+        console.error('[SearchPage] Trip types API error:', typesResponse.status, typesResponse.statusText);
+        console.error('[SearchPage] Error response:', errorText);
+        setTypesError(true);
+        setIsLoadingTypes(false);
+        return;
+      }
+      
+      const typesData = await typesResponse.json();
+      console.log('[SearchPage] Trip types data received:', typesData.data?.length || 0, 'types');
+      
+      if (typesData.data && typesData.data.length > 0) {
+        const mappedTypes: Tag[] = typesData.data.map((t: any) => ({
+          id: t.id,
+          name: t.name,
+          nameHe: t.name_he || t.nameHe || t.name,
+          category: 'Type'
+        }));
+        setTripTypes(mappedTypes);
       } else {
+        console.error('[SearchPage] No trip types in response. Response data:', typesData);
         setTypesError(true);
       }
 
-      const timeoutId2 = setTimeout(() => controller.abort(), 60000);
+      const timeoutId2 = setTimeout(() => controller.abort(), 10000);
+      console.log('[SearchPage] Fetching tags from:', `${API_URL}/api/tags`);
+      
       // Fetch tags (themes)
       const tagsResponse = await fetch(`${API_URL}/api/tags`, {
-        signal: controller.signal
+        signal: controller.signal,
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        mode: 'cors',
+        credentials: 'omit',
       });
       clearTimeout(timeoutId2);
       
-      if (tagsResponse.ok) {
-        const tagsData = await tagsResponse.json();
-        if (tagsData.success || tagsData.ok) {
-          const mappedTags: Tag[] = tagsData.data
-            .filter((t: any) => t.category?.toUpperCase() === 'THEME' || t.category === 'Theme')
-            .map((t: any) => ({
-              id: t.id,
-              name: t.name,
-              nameHe: t.name_he || t.nameHe || t.name,
-              category: 'Theme'
-            }));
-          setThemeTags(mappedTags);
-          setIsColdStart(false); // Clear cold start on success
-          setRetryAttempt(0);
-        }
+      console.log('[SearchPage] Tags response status:', tagsResponse.status);
+      
+      if (!tagsResponse.ok) {
+        const errorText = await tagsResponse.text().catch(() => 'Unknown error');
+        console.error('[SearchPage] Tags API error:', tagsResponse.status, tagsResponse.statusText);
+        console.error('[SearchPage] Error response:', errorText);
+        setTypesError(true);
+        return;
+      }
+      
+      const tagsData = await tagsResponse.json();
+      console.log('[SearchPage] Tags data received:', tagsData.data?.length || 0, 'tags');
+      
+      if (tagsData.success || tagsData.ok) {
+        const mappedTags: Tag[] = tagsData.data
+          .filter((t: any) => t.category?.toUpperCase() === 'THEME' || t.category === 'Theme')
+          .map((t: any) => ({
+            id: t.id,
+            name: t.name,
+            nameHe: t.name_he || t.nameHe || t.name,
+            category: 'Theme'
+          }));
+        setThemeTags(mappedTags);
+        setIsColdStart(false); // Clear cold start on success
+        setRetryAttempt(0);
       } else {
+        console.error('[SearchPage] Tags response not successful. Response data:', tagsData);
         setTypesError(true);
       }
-    } catch (error) {
-      console.error('Failed to fetch types/tags from API:', error);
+    } catch (error: any) {
+      console.error('[SearchPage] Failed to fetch types/tags from API:', error);
+      console.error('[SearchPage] Error details:', {
+        name: error?.name,
+        message: error?.message,
+        type: error?.constructor?.name
+      });
       
-      if (detectColdStart(error)) {
-        setIsColdStart(true);
-      }
       setTypesError(true);
-    } finally {
       setIsLoadingTypes(false);
     }
   }, [retryAttempt]);
+
 
   // Fetch data on mount
   useEffect(() => {
@@ -922,52 +1050,37 @@ function SearchPageContent() {
   const hasData = countries.length > 0 && tripTypes.length > 0;
 
   // If still loading initial data, show loading indicator (clean white background)
-  if (isLoading && !hasData) {
+  if (isLoading && !hasData && !hasError) {
     return (
       <div className="min-h-screen bg-white flex items-center justify-center p-4">
         <div className="text-center max-w-md">
           <Loader2 className="w-12 h-12 animate-spin text-[#12acbe] mx-auto mb-4" />
           <p className="text-[#5a5a5a] text-lg mb-2">טוען אפשרויות חיפוש...</p>
-          <p className="text-[#7f7f7f] text-sm">
-            טעינה ראשונית עשויה לקחת מספר רגעים...
-          </p>
         </div>
       </div>
     );
   }
 
-  // If error fetching data and no cached data, show error with retry (clean white background)
+  // If error fetching data and no cached data, show error with retry
   if (hasError && !hasData) {
     return (
       <div className="min-h-screen bg-white flex items-center justify-center p-4">
         <div className="text-center max-w-md p-8">
-          <div className={`w-16 h-16 ${isColdStart ? 'bg-orange-100' : 'bg-red-100'} rounded-full flex items-center justify-center mx-auto mb-4`}>
-            {isColdStart ? (
-              <Loader2 className="w-8 h-8 text-orange-600 animate-spin" />
-            ) : (
-              <X className="w-8 h-8 text-red-600" />
-            )}
+          <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <X className="w-8 h-8 text-red-600" />
           </div>
-          <h2 className="text-xl font-bold text-gray-800 mb-2">
-            {isColdStart ? 'שרת מתעורר...' : 'שגיאת חיבור'}
+          <h2 className="text-xl font-bold text-gray-800 mb-4">
+            שגיאת חיבור לשרת
           </h2>
-          <p className="text-gray-600 mb-6">
-            {isColdStart ? (
-              <>
-                השרת שלנו היה בהשהיה והוא מתעורר כעת. זה עשוי לקחת 30-60 שניות בפעם הראשונה.
-                {retryAttempt > 0 && (
-                  <span className="block mt-2 text-sm text-orange-600 font-medium">
-                    מנסה שוב אוטומטית...
-                  </span>
-                )}
-              </>
-            ) : (
-              'לא ניתן לטעון את אפשרויות החיפוש מהשרת. אנא בדוק את החיבור שלך ונסה שוב.'
-            )}
-          </p>
+          <div className="text-gray-600 mb-6 space-y-2 text-sm">
+            <p>לא ניתן להתחבר לשרת: <code className="bg-gray-100 px-2 py-1 rounded text-xs">{API_URL}</code></p>
+            <p className="text-xs text-gray-500">
+              בדוק שהשרת פועל: פתח <a href={`${API_URL}/api/health`} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">קישור זה</a> בדפדפן
+            </p>
+          </div>
           <button
             onClick={retryFetchData}
-            className={`px-6 py-3 ${isColdStart ? 'bg-orange-600 hover:bg-orange-700' : 'bg-[#076839] hover:bg-[#0ba55c]'} text-white rounded-xl font-medium transition-all`}
+            className="w-full px-6 py-3 bg-[#076839] hover:bg-[#0ba55c] text-white rounded-xl font-medium transition-all"
           >
             נסה שוב עכשיו
           </button>
@@ -978,20 +1091,56 @@ function SearchPageContent() {
 
   return (
     <div className="min-h-screen bg-white">
+      {/* Logout Confirmation Dialog */}
+      {showLogoutConfirm && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-2xl shadow-2xl p-6 md:p-8 max-w-md w-full mx-4">
+            <h3 className="text-xl md:text-2xl font-bold text-gray-800 mb-4 text-center">
+              האם ברצונך להתנתק מהמערכת?
+            </h3>
+            <div className="flex gap-4 justify-center">
+              <button
+                onClick={confirmLogout}
+                className="px-6 py-3 bg-[#076839] text-white rounded-lg font-semibold hover:bg-[#065a2e] transition-colors"
+                type="button"
+              >
+                כן
+              </button>
+              <button
+                onClick={cancelLogout}
+                className="px-6 py-3 bg-gray-200 text-gray-800 rounded-lg font-semibold hover:bg-gray-300 transition-colors"
+                type="button"
+              >
+                לא
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <header className="bg-[#076839] text-white py-4 md:py-6 shadow-lg">
         <div className="container mx-auto px-4">
           <div className="flex items-center justify-between gap-4">
-            {/* Return to Home Button */}
-            <div className="w-16 md:w-32 flex items-center justify-start">
+            {/* Return to Home Button and Logout */}
+            <div className="w-16 md:w-32 flex items-center justify-start gap-2">
               <button
                 onClick={() => router.push('/')}
                 className="flex items-center gap-2 px-3 py-2 md:px-4 md:py-2 bg-white/10 hover:bg-white/20 rounded-lg transition-all duration-200 group"
                 title="חזרה לדף הבית"
               >
                 <Home className="w-5 h-5 md:w-6 md:h-6 group-hover:scale-110 transition-transform" />
-                <span className="hidden md:inline text-sm font-medium">דף הבית</span>
               </button>
+              {isAuthAvailable() && userName && (
+                <button
+                  onClick={handleLogout}
+                  className="flex items-center gap-2 px-3 py-2 md:px-4 md:py-2 bg-white/10 hover:bg-white/20 rounded-lg transition-all duration-200 group"
+                  title="התנתק"
+                  type="button"
+                >
+                  <LogOut className="w-5 h-5 md:w-6 md:h-6 group-hover:scale-110 transition-transform" />
+                </button>
+              )}
             </div>
             
             {/* Title - Centered */}
@@ -1000,7 +1149,11 @@ function SearchPageContent() {
                 מצא את הטיול המושלם עבורך
               </h1>
               <p className="text-gray-100 mt-1 md:mt-2 text-sm md:text-base">
-                מערכת המלצות חכמה לטיולים מאורגנים
+                {isLoadingUser ? (
+                  'טוען...'
+                ) : userName ? (
+                  <span className="font-medium">שלום {userName}!</span>
+                ) : null}
               </p>
             </div>
             
@@ -1083,7 +1236,8 @@ function SearchPageContent() {
               )}
               
               {/* Countries grouped by continent - SORTED A-Z by continent name */}
-              {Object.entries(countriesByContinent)
+              {Object.keys(countriesByContinent).length > 0 ? (
+                Object.entries(countriesByContinent)
                 .sort(([continentA], [continentB]) => {
                   // Use the Hebrew names for sorting alphabetically
                   const continentInfoA = CONTINENTS.find(c => c.value === continentA);
@@ -1093,40 +1247,44 @@ function SearchPageContent() {
                   return nameA.localeCompare(nameB, 'he');
                 })
                 .map(([continent, countriesList]) => {
-                const continentInfo = CONTINENTS.find(c => c.value === continent);
-                
-                return (
-                  <div key={continent} className="border-b last:border-b-0">
-                    {/* Continent Header - RTL with continent name on right, chevron on left */}
-                    <button
-                      onClick={() => addLocation('continent', continent, continent, continentInfo?.nameHe || continent)}
-                      className="w-full px-4 py-3 bg-gray-50 hover:bg-[#12acbe]/10 font-bold text-[#076839] flex items-center justify-between"
-                    >
-                      <ChevronDown className="w-4 h-4 flex-shrink-0" />
-                      <span className="flex-1 text-right">{continentInfo?.nameHe || continent}</span>
-                    </button>
-                    
-                    {/* Countries */}
-                    <div className="bg-white">
-                      {countriesList.map(country => (
-                        <button
-                          key={country.id}
-                          onClick={() => addLocation('country', country.id, country.name, country.nameHe)}
-                          className="w-full px-6 py-3 md:py-2 text-right hover:bg-gray-50 active:bg-gray-100 text-[#5a5a5a] hover:text-[#12acbe] transition-colors touch-manipulation"
-                        >
-                          {country.nameHe}
-                        </button>
-                      ))}
+                  const continentInfo = CONTINENTS.find(c => c.value === continent);
+                  
+                  return (
+                    <div key={continent} className="border-b last:border-b-0">
+                      {/* Continent Header - RTL with continent name on right, chevron on left */}
+                      <button
+                        onClick={() => addLocation('continent', continent, continent, continentInfo?.nameHe || continent)}
+                        className="w-full px-4 py-3 bg-gray-50 hover:bg-[#12acbe]/10 font-bold text-[#076839] flex items-center justify-between"
+                      >
+                        <ChevronDown className="w-4 h-4 flex-shrink-0" />
+                        <span className="flex-1 text-right">{continentInfo?.nameHe || continent}</span>
+                      </button>
+                      
+                      {/* Countries */}
+                      <div className="bg-white">
+                        {countriesList.map(country => (
+                          <button
+                            key={country.id}
+                            onClick={() => addLocation('country', country.id, country.name, country.nameHe)}
+                            className="w-full px-6 py-3 md:py-2 text-right hover:bg-gray-50 active:bg-gray-100 text-[#5a5a5a] hover:text-[#12acbe] transition-colors touch-manipulation"
+                          >
+                            {country.nameHe}
+                          </button>
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                );
-              })}
-              
-              {/* Loading indicator */}
-              {isLoadingCountries && (
+                  );
+                })
+              ) : (
                 <div className="p-4 text-center text-gray-500">
-                  <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2" />
-                  טוען יעדים...
+                  {isLoadingCountries ? (
+                    <>
+                      <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2" />
+                      טוען יעדים...
+                    </>
+                  ) : (
+                    'לא ניתן לטעון יעדים מהשרת'
+                  )}
                 </div>
               )}
               </div>
@@ -1161,7 +1319,7 @@ function SearchPageContent() {
           <p className="text-sm text-gray-600 mb-3 md:mb-4 text-right">בחר סגנון טיול אחד</p>
 
           <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2 md:gap-4">
-            {tripTypes.map(tag => (
+            {tripTypes.length > 0 ? tripTypes.map(tag => (
               <TagCircle
                 key={tag.id}
                 tag={tag}
@@ -1169,7 +1327,11 @@ function SearchPageContent() {
                 onClick={() => setSelectedType(selectedType === tag.id ? null : tag.id)}
                 iconMap={TYPE_ICONS}
               />
-            ))}
+            )) : (
+              <div className="col-span-full text-center text-gray-500 py-4 text-sm">
+                {isLoadingTypes ? 'טוען סגנונות טיול...' : 'לא ניתן לטעון סגנונות טיול'}
+              </div>
+            )}
           </div>
           
           <div className="mt-4 md:mt-6">
@@ -1197,7 +1359,7 @@ function SearchPageContent() {
           </p>
 
           <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2 md:gap-4">
-            {themeTags.map(tag => (
+            {themeTags.length > 0 ? themeTags.map(tag => (
               <TagCircle
                 key={tag.id}
                 tag={tag}
@@ -1205,7 +1367,11 @@ function SearchPageContent() {
                 onClick={() => toggleTheme(tag.id)}
                 iconMap={THEME_ICONS}
               />
-            ))}
+            )) : (
+              <div className="col-span-full text-center text-gray-500 py-4 text-sm">
+                {isLoadingTypes ? 'טוען נושאי טיול...' : 'לא ניתן לטעון נושאי טיול'}
+              </div>
+            )}
           </div>
         </section>
 

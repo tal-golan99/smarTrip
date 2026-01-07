@@ -129,8 +129,13 @@ app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'dev-secret-key-change-in-pro
 
 # Configure CORS - Secure by default, configurable via environment
 # Set ALLOWED_ORIGINS in .env as comma-separated list: "https://example.com,https://app.example.com"
-allowed_origins = os.getenv('ALLOWED_ORIGINS', 'http://localhost:3000').split(',')
-allowed_origins = [origin.strip() for origin in allowed_origins]  # Clean whitespace
+allowed_origins_str = os.getenv('ALLOWED_ORIGINS', 'http://localhost:3000')
+allowed_origins = [origin.strip() for origin in allowed_origins_str.split(',')]  # Clean whitespace
+
+# Log CORS configuration for debugging (only in production to help troubleshoot)
+if os.getenv('FLASK_ENV') == 'production':
+    print(f"[CORS] Production mode - Allowing origins: {allowed_origins}", flush=True)
+    print(f"[CORS] ALLOWED_ORIGINS env var: {allowed_origins_str}", flush=True)
 
 CORS(app, resources={
     r"/api/*": {
@@ -469,6 +474,13 @@ def get_guide(guide_id):
 
 @app.route('/api/trip-types', methods=['GET'])
 def get_trip_types():
+    # Handle preflight OPTIONS request
+    if request.method == 'OPTIONS':
+        response = jsonify({})
+        response.headers.add('Access-Control-Allow-Origin', request.headers.get('Origin', '*'))
+        response.headers.add('Access-Control-Allow-Methods', 'GET, OPTIONS')
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type, Authorization')
+        return response
     """Get all trip types (trip styles)"""
     try:
         trip_types = db_session.query(TripType).order_by(TripType.name).all()
@@ -492,6 +504,13 @@ def get_trip_types():
 
 @app.route('/api/tags', methods=['GET'])
 def get_tags():
+    # Handle preflight OPTIONS request
+    if request.method == 'OPTIONS':
+        response = jsonify({})
+        response.headers.add('Access-Control-Allow-Origin', request.headers.get('Origin', '*'))
+        response.headers.add('Access-Control-Allow-Methods', 'GET, OPTIONS')
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type, Authorization')
+        return response
     """Get all theme tags (trip interests/themes only)
     
     Note: After schema migration, this endpoint only returns THEME tags.
@@ -1799,9 +1818,15 @@ def scheduler_status():
 # ============================================
 
 # Initialize database and auto-seed on module load (for production)
+# Wrap in try-except to allow app to start even if DB is temporarily unavailable
 with app.app_context():
-    init_db()
-    auto_seed_if_empty()
+    try:
+        init_db()
+        auto_seed_if_empty()
+    except Exception as e:
+        print(f"[WARNING] Database initialization failed: {e}")
+        print("[WARNING] App will start but database operations may fail until connection is restored.")
+        print("[WARNING] This is normal if DATABASE_URL is not set or database is temporarily unavailable.")
 
 # Start background scheduler (runs in-process with Flask)
 # This starts the scheduler when the module is loaded (works with gunicorn)

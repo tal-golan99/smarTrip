@@ -21,6 +21,15 @@ from .service import (
     EVENT_CATEGORIES
 )
 
+# Import auth helper (optional - won't break if not available)
+try:
+    from auth_supabase import get_current_user
+    AUTH_AVAILABLE = True
+except ImportError:
+    AUTH_AVAILABLE = False
+    def get_current_user():
+        return None
+
 # Create Blueprint
 events_bp = Blueprint('events', __name__, url_prefix='/api')
 
@@ -56,10 +65,16 @@ def start_session():
         
         service = get_event_service()
         
-        # Get or create user first
+        # Get authenticated user from JWT (if available)
+        auth_user = None
+        if AUTH_AVAILABLE:
+            auth_user = get_current_user()
+        
+        # Get or create user (prioritize authenticated user)
         user = service.get_or_create_user(
             anonymous_id=data['anonymous_id'],
-            email=data.get('email')
+            email=auth_user.get('email') if auth_user else data.get('email'),
+            supabase_user_id=auth_user.get('id') if auth_user else None
         )
         
         # Get real IP (handles load balancers)
@@ -135,10 +150,16 @@ def track_event():
                 'error': 'source is required for click_trip events'
             }), 400
         
-        # Resolve user (creates if not exists)
+        # Get authenticated user from JWT (if available)
+        auth_user = None
+        if AUTH_AVAILABLE:
+            auth_user = get_current_user()
+        
+        # Resolve user (prioritize authenticated user)
         user = service.get_or_create_user(
             anonymous_id=data['anonymous_id'],
-            email=data.get('email')
+            email=auth_user.get('email') if auth_user else data.get('email'),
+            supabase_user_id=auth_user.get('id') if auth_user else None
         )
         
         # Track the event
@@ -200,11 +221,20 @@ def track_events_batch():
         
         service = get_event_service()
         
+        # Get authenticated user from JWT (if available)
+        auth_user = None
+        if AUTH_AVAILABLE:
+            auth_user = get_current_user()
+        
         # Resolve users for all unique anonymous_ids first
         anonymous_ids = set(e.get('anonymous_id') for e in events if e.get('anonymous_id'))
         user_map = {}
         for anon_id in anonymous_ids:
-            user = service.get_or_create_user(anonymous_id=anon_id)
+            user = service.get_or_create_user(
+                anonymous_id=anon_id,
+                email=auth_user.get('email') if auth_user else None,
+                supabase_user_id=auth_user.get('id') if auth_user else None
+            )
             user_map[anon_id] = user.id
         
         # Add user_id to each event

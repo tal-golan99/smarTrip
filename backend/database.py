@@ -3,7 +3,7 @@ Database configuration and session management
 """
 
 import os
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker, scoped_session
 from models import Base
 from dotenv import load_dotenv
@@ -23,13 +23,21 @@ if DATABASE_URL.startswith('postgres://'):
 if 'supabase' in DATABASE_URL and 'sslmode' not in DATABASE_URL:
     DATABASE_URL = DATABASE_URL + ('&' if '?' in DATABASE_URL else '?') + 'sslmode=require'
 
-# Create engine
+# Create engine with connection pooling
+# For Supabase pooler, use smaller pool size
+# For direct connections, can use larger pool
+pool_size = 5 if 'pooler' in DATABASE_URL else 10
+max_overflow = 10 if 'pooler' in DATABASE_URL else 20
+
 engine = create_engine(
     DATABASE_URL,
     echo=True if os.getenv('FLASK_ENV') == 'development' else False,
-    pool_size=10,
-    max_overflow=20,
-    pool_pre_ping=True  # Verify connections before using them
+    pool_size=pool_size,
+    max_overflow=max_overflow,
+    pool_pre_ping=True,  # Verify connections before using them
+    connect_args={
+        'connect_timeout': 10,  # 10 second timeout
+    } if 'postgresql' in DATABASE_URL else {}
 )
 
 # Create session factory
@@ -41,8 +49,30 @@ db_session = scoped_session(SessionLocal)
 
 def init_db():
     """Initialize database - create all tables"""
-    Base.metadata.create_all(bind=engine)
-    print("Database tables created successfully!")
+    try:
+        # Test connection first
+        with engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
+        
+        Base.metadata.create_all(bind=engine)
+        print("[DB] Database tables created successfully!")
+    except Exception as e:
+        print(f"[WARNING] Failed to connect to database: {e}")
+        # Show partial DATABASE_URL for debugging (hide password)
+        db_url_display = DATABASE_URL
+        if '@' in db_url_display:
+            # Hide password in display
+            parts = db_url_display.split('@')
+            if len(parts) == 2:
+                user_pass = parts[0].split('://')[-1]
+                if ':' in user_pass:
+                    user = user_pass.split(':')[0]
+                    db_url_display = db_url_display.replace(user_pass, f"{user}:***")
+        
+        print(f"[INFO] DATABASE_URL: {db_url_display[:80]}..." if len(db_url_display) > 80 else f"[INFO] DATABASE_URL: {db_url_display}")
+        print("[INFO] App will continue but database operations may fail.")
+        print("[INFO] See backend/README_DATABASE.md for troubleshooting.")
+        # Don't raise - allow app to start without DB
 
 
 def drop_db():
