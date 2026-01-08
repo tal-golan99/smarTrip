@@ -12,6 +12,7 @@ Endpoints:
 - POST /api/session/start - Initialize session with device info
 """
 
+import os
 from flask import Blueprint, request, jsonify
 from .service import (
     get_event_service, 
@@ -99,8 +100,21 @@ def start_session():
         }), 200
     
     except Exception as e:
-        print(f"[EVENTS] Session start error: {e}", flush=True)
-        return jsonify({'success': False, 'error': str(e)}), 500
+        error_msg = str(e)
+        error_type = type(e).__name__
+        
+        # Log detailed error for debugging
+        print(f"[EVENTS] Session start error: {error_type}: {error_msg}", flush=True)
+        import traceback
+        traceback.print_exc()  # Print full stack trace to logs
+        
+        # Return error details (helpful for debugging, but sanitized)
+        # In production, you might want to hide internal errors
+        return jsonify({
+            'success': False,
+            'error': error_msg if 'FLASK_ENV' in os.environ and os.environ['FLASK_ENV'] == 'development' else 'Session initialization failed',
+            'type': error_type
+        }), 500
 
 
 # ============================================

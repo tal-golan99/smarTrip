@@ -223,9 +223,22 @@ export async function initializeSession(): Promise<void> {
     
     if (response.ok) {
       sessionInitialized = true;
+    } else {
+      // Log but don't block - graceful degradation
+      const errorData = await response.json().catch(() => ({}));
+      console.warn(
+        '[Tracking] Session start failed, continuing without tracking:',
+        errorData.error || response.statusText
+      );
+      // Don't set sessionInitialized = false to prevent retries
+      // Just mark as attempted so we don't retry immediately
+      sessionInitialized = true; // Prevent immediate retry
     }
   } catch (error) {
-    console.error('[Tracking] Failed to initialize session:', error);
+    // Network error - log but continue
+    console.warn('[Tracking] Session start error, continuing without tracking:', error);
+    // Don't set sessionInitialized = false to prevent retries
+    sessionInitialized = true; // Prevent immediate retry
   }
 }
 

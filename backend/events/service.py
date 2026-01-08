@@ -77,27 +77,75 @@ def get_real_ip(request) -> Optional[str]:
         request: Flask request object
         
     Returns:
-        Client IP address or None
+        Client IP address or None (validated for PostgreSQL INET type)
     """
+    ip_str = None
+    
     # Check X-Forwarded-For first (set by load balancers)
     forwarded_for = request.headers.get('X-Forwarded-For')
     if forwarded_for:
         # X-Forwarded-For can contain multiple IPs: "client, proxy1, proxy2"
         # The first one is the original client
-        return forwarded_for.split(',')[0].strip()
+        ip_str = forwarded_for.split(',')[0].strip()
+    elif request.headers.get('X-Real-IP'):
+        # Fallback headers used by various proxies
+        ip_str = request.headers.get('X-Real-IP').strip()
+    elif request.headers.get('CF-Connecting-IP'):
+        # CF-Connecting-IP for Cloudflare
+        ip_str = request.headers.get('CF-Connecting-IP').strip()
+    else:
+        # Final fallback to remote_addr
+        ip_str = request.remote_addr
     
-    # Fallback headers used by various proxies
-    real_ip = request.headers.get('X-Real-IP')
-    if real_ip:
-        return real_ip.strip()
+    # Validate IP for PostgreSQL INET type
+    return _validate_ip(ip_str)
+
+
+def _validate_ip(ip_str: Optional[str]) -> Optional[str]:
+    """
+    Validate IP address for PostgreSQL INET type.
     
-    # CF-Connecting-IP for Cloudflare
-    cf_ip = request.headers.get('CF-Connecting-IP')
-    if cf_ip:
-        return cf_ip.strip()
+    INET type is strict and rejects:
+    - Empty strings
+    - Invalid formats
+    - Hostnames
     
-    # Final fallback to remote_addr
-    return request.remote_addr
+    Args:
+        ip_str: IP address string to validate
+        
+    Returns:
+        Valid IP string or None (for nullable column)
+    """
+    if not ip_str or not isinstance(ip_str, str):
+        return None
+    
+    ip_str = ip_str.strip()
+    if not ip_str:
+        return None
+    
+    # Basic IPv4 validation (PostgreSQL will do stricter validation)
+    import re
+    # IPv4 pattern: 4 groups of 1-3 digits separated by dots
+    ipv4_pattern = r'^(\d{1,3}\.){3}\d{1,3}$'
+    
+    if re.match(ipv4_pattern, ip_str):
+        # Additional check: each octet should be 0-255
+        try:
+            parts = ip_str.split('.')
+            if all(0 <= int(part) <= 255 for part in parts):
+                return ip_str
+        except ValueError:
+            pass
+    
+    # IPv6 validation (basic check)
+    if ':' in ip_str:
+        # Basic IPv6 format check (PostgreSQL will validate fully)
+        # Allow compressed format (::) and expanded format
+        if re.match(r'^([0-9a-fA-F]{0,4}:){2,7}[0-9a-fA-F]{0,4}$', ip_str) or '::' in ip_str:
+            return ip_str
+    
+    # Invalid IP format - return None (column is nullable)
+    return None
 
 
 def classify_search(preferences: Dict[str, Any]) -> str:

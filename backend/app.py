@@ -615,8 +615,8 @@ def get_daily_metrics():
     Returns list of daily metrics.
     """
     if not LOGGING_ENABLED:
-        return jsonify({
-            'success': False,
+            return jsonify({
+                'success': False,
             'error': 'Metrics module not available'
         }), 503
     
@@ -780,8 +780,8 @@ def get_evaluation_scenarios():
                 'expected_min_results': s.get('expected_min_results'),
             })
         
-        return jsonify({
-            'success': True,
+            return jsonify({
+                'success': True,
             'count': len(scenario_list),
             'data': scenario_list
         }), 200
@@ -801,8 +801,8 @@ def get_evaluation_scenarios():
 def scheduler_status():
     """Get background scheduler status and job information"""
     if not SCHEDULER_ENABLED:
-        return jsonify({
-            'success': False,
+    return jsonify({
+        'success': False,
             'error': 'Scheduler module not available'
         }), 503
     
@@ -813,10 +813,10 @@ def scheduler_status():
             'data': status
         }), 200
     except Exception as e:
-        return jsonify({
-            'success': False,
+    return jsonify({
+        'success': False,
             'error': str(e)
-        }), 500
+    }), 500
 
 
 # ============================================
@@ -827,7 +827,7 @@ def scheduler_status():
 # Wrap in try-except to allow app to start even if DB is temporarily unavailable
 with app.app_context():
     try:
-        init_db()
+    init_db()
         print("[INIT] Database initialized. Data comes from Supabase (DATABASE_URL).")
     except Exception as e:
         print(f"[WARNING] Database initialization failed: {e}")
