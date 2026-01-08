@@ -827,7 +827,7 @@ def scheduler_status():
 # Wrap in try-except to allow app to start even if DB is temporarily unavailable
 with app.app_context():
     try:
-    init_db()
+        init_db()
         print("[INIT] Database initialized. Data comes from Supabase (DATABASE_URL).")
     except Exception as e:
         print(f"[WARNING] Database initialization failed: {e}")
