@@ -116,10 +116,16 @@ function AuthCallbackContent() {
         const SESSION_RETRY_DELAY = 500;
         
         const retrySession = async () => {
+          // Ensure supabase is available (TypeScript guard)
+          const supabaseClient = supabase;
+          if (!supabaseClient) {
+            return;
+          }
+          
           while (retryCount < MAX_SESSION_RETRIES) {
             await new Promise(resolve => setTimeout(resolve, SESSION_RETRY_DELAY));
             
-            const { data: { session: retrySession } } = await supabase.auth.getSession();
+            const { data: { session: retrySession } } = await supabaseClient.auth.getSession();
             if (retrySession) {
               cleanup();
               console.log('[Auth] Session found on retry, redirecting to:', redirectTo);
