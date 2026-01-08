@@ -403,7 +403,19 @@ export async function getLocations(): Promise<ApiResponse<{
 }>> {
   // The backend returns: { success: true, countries: [...], continents: [...] }
   // apiFetch returns this directly (not wrapped in data field)
-  const response = await apiFetch<any>('/api/locations');
+  // We need to type assert because ApiResponse doesn't include countries/continents at top level
+  const response = await apiFetch<any>('/api/locations') as any as {
+    success: boolean;
+    countries?: Array<{
+      id: number;
+      name: string;
+      name_he?: string;
+      nameHe?: string;
+      continent: string;
+    }>;
+    continents?: Array<{ value: string; nameHe: string }>;
+    error?: string;
+  };
   
   if (!response || !response.success) {
     return {
@@ -419,7 +431,7 @@ export async function getLocations(): Promise<ApiResponse<{
   return {
     success: true,
     data: {
-      countries: countries.map((c: any) => ({
+      countries: countries.map((c) => ({
         id: c.id,
         name: c.name,
         nameHe: c.name_he || c.nameHe || c.name,
