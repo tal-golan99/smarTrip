@@ -100,12 +100,22 @@ async function apiFetch<T>(
       timeoutId = null;
     }
 
-    const data = await response.json();
+    let data;
+    try {
+      data = await response.json();
+    } catch (jsonError) {
+      // If response is not JSON, return error
+      throw new Error('Invalid JSON response from server');
+    }
 
     if (!response.ok) {
       throw new Error(data.error || 'API request failed');
     }
 
+    // Backend returns data in various formats:
+    // - Standard: { success: true, data: {...} }
+    // - Non-standard: { success: true, countries: [...], continents: [...] }
+    // apiFetch returns the raw response, so we preserve it
     return data;
   } catch (error) {
     // Clear timeout if it wasn't cleared
@@ -380,6 +390,46 @@ export async function healthCheck() {
 export async function getCountries(continent?: string): Promise<ApiResponse<Country[]>> {
   const query = continent ? `?continent=${continent}` : '';
   return apiFetch<Country[]>(`/api/countries${query}`);
+}
+
+/**
+ * Get all locations (countries + continents) for search dropdown
+ * This endpoint returns both countries and continents in a single response
+ * Backend format: { success: true, countries: [...], continents: [...] }
+ */
+export async function getLocations(): Promise<ApiResponse<{
+  countries: Country[];
+  continents: Array<{ value: string; nameHe: string }>;
+}>> {
+  // The backend returns: { success: true, countries: [...], continents: [...] }
+  // apiFetch returns this directly (not wrapped in data field)
+  const response = await apiFetch<any>('/api/locations');
+  
+  if (!response || !response.success) {
+    return {
+      success: false,
+      error: response?.error || 'Failed to fetch locations',
+    };
+  }
+  
+  // Backend returns countries/continents at top level
+  const countries = response.countries || [];
+  const continents = response.continents || [];
+  
+  return {
+    success: true,
+    data: {
+      countries: countries.map((c: any) => ({
+        id: c.id,
+        name: c.name,
+        nameHe: c.name_he || c.nameHe || c.name,
+        continent: c.continent,
+        createdAt: '',
+        updatedAt: '',
+      })),
+      continents: continents,
+    },
+  };
 }
 
 /**

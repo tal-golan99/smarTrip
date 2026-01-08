@@ -22,6 +22,9 @@ import {
 // Supabase auth imports
 import { getCurrentUser, supabase, isAuthAvailable } from '@/lib/supabaseClient';
 
+// API functions with retry logic
+import { getLocations, getTripTypes, getTags } from '@/lib/api';
+
 // API URL from environment variable
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
 
@@ -606,42 +609,26 @@ function SearchPageContent() {
     window.scrollTo({ top: 0, behavior: 'instant' });
   }, []);
   // Fetch countries from API - callable for retry
+  // Now uses apiFetch() with automatic retry logic for cold starts
   const fetchCountries = useCallback(async () => {
     setIsLoadingCountries(true);
     setCountriesError(false);
     try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout (reduced from 60s)
+      console.log('[SearchPage] Fetching countries from API (with retry logic)...');
       
-      console.log('[SearchPage] Fetching countries from:', `${API_URL}/api/locations`);
+      const response = await getLocations();
       
-      const response = await fetch(`${API_URL}/api/locations`, {
-        signal: controller.signal,
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        mode: 'cors',
-        credentials: 'omit',
-      });
-      clearTimeout(timeoutId);
-      
-      console.log('[SearchPage] Countries response status:', response.status);
-      
-      if (!response.ok) {
-        const errorText = await response.text().catch(() => 'Unknown error');
-        console.error('[SearchPage] Countries API error:', response.status, response.statusText);
-        console.error('[SearchPage] Error response:', errorText);
+      if (!response.success || !response.data) {
+        console.error('[SearchPage] Countries API error:', response.error);
         setCountriesError(true);
         setIsLoadingCountries(false);
         return;
       }
       
-      const data = await response.json();
-      console.log('[SearchPage] Countries data received:', data.countries?.length || 0, 'countries');
+      console.log('[SearchPage] Countries data received:', response.data.countries?.length || 0, 'countries');
       
-      if (data.countries && data.countries.length > 0) {
-        const mappedCountries: Country[] = data.countries.map((c: any) => ({
+      if (response.data.countries && response.data.countries.length > 0) {
+        const mappedCountries: Country[] = response.data.countries.map((c: any) => ({
           id: c.id,
           name: c.name,
           nameHe: c.name_he || c.nameHe || c.name,
@@ -651,7 +638,7 @@ function SearchPageContent() {
         setIsColdStart(false);
         setRetryAttempt(0);
       } else {
-        console.error('[SearchPage] No countries in response. Response data:', data);
+        console.error('[SearchPage] No countries in response. Response data:', response.data);
         setCountriesError(true);
       }
     } catch (error: any) {
@@ -664,49 +651,31 @@ function SearchPageContent() {
       
       setCountriesError(true);
       setIsLoadingCountries(false);
-      
-      // Don't auto-retry - let user decide
     }
   }, [retryAttempt]);
 
   // Fetch trip types and tags from API - callable for retry
+  // Now uses apiFetch() with automatic retry logic for cold starts
   const fetchTypesAndTags = useCallback(async () => {
     setIsLoadingTypes(true);
     setTypesError(false);
     try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout (reduced from 60s)
-      
-      console.log('[SearchPage] Fetching trip types from:', `${API_URL}/api/trip-types`);
+      console.log('[SearchPage] Fetching trip types from API (with retry logic)...');
       
       // Fetch trip types
-      const typesResponse = await fetch(`${API_URL}/api/trip-types`, {
-        signal: controller.signal,
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        mode: 'cors',
-        credentials: 'omit',
-      });
-      clearTimeout(timeoutId);
+      const typesResponse = await getTripTypes();
       
-      console.log('[SearchPage] Trip types response status:', typesResponse.status);
-      
-      if (!typesResponse.ok) {
-        const errorText = await typesResponse.text().catch(() => 'Unknown error');
-        console.error('[SearchPage] Trip types API error:', typesResponse.status, typesResponse.statusText);
-        console.error('[SearchPage] Error response:', errorText);
+      if (!typesResponse.success || !typesResponse.data) {
+        console.error('[SearchPage] Trip types API error:', typesResponse.error);
         setTypesError(true);
         setIsLoadingTypes(false);
         return;
       }
       
-      const typesData = await typesResponse.json();
-      console.log('[SearchPage] Trip types data received:', typesData.data?.length || 0, 'types');
+      console.log('[SearchPage] Trip types data received:', typesResponse.data?.length || 0, 'types');
       
-      if (typesData.data && typesData.data.length > 0) {
-        const mappedTypes: Tag[] = typesData.data.map((t: any) => ({
+      if (typesResponse.data && typesResponse.data.length > 0) {
+        const mappedTypes: Tag[] = typesResponse.data.map((t: any) => ({
           id: t.id,
           name: t.name,
           nameHe: t.name_he || t.nameHe || t.name,
@@ -714,40 +683,26 @@ function SearchPageContent() {
         }));
         setTripTypes(mappedTypes);
       } else {
-        console.error('[SearchPage] No trip types in response. Response data:', typesData);
+        console.error('[SearchPage] No trip types in response. Response data:', typesResponse.data);
         setTypesError(true);
       }
 
-      const timeoutId2 = setTimeout(() => controller.abort(), 10000);
-      console.log('[SearchPage] Fetching tags from:', `${API_URL}/api/tags`);
+      console.log('[SearchPage] Fetching tags from API (with retry logic)...');
       
       // Fetch tags (themes)
-      const tagsResponse = await fetch(`${API_URL}/api/tags`, {
-        signal: controller.signal,
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        mode: 'cors',
-        credentials: 'omit',
-      });
-      clearTimeout(timeoutId2);
+      const tagsResponse = await getTags();
       
-      console.log('[SearchPage] Tags response status:', tagsResponse.status);
-      
-      if (!tagsResponse.ok) {
-        const errorText = await tagsResponse.text().catch(() => 'Unknown error');
-        console.error('[SearchPage] Tags API error:', tagsResponse.status, tagsResponse.statusText);
-        console.error('[SearchPage] Error response:', errorText);
+      if (!tagsResponse.success || !tagsResponse.data) {
+        console.error('[SearchPage] Tags API error:', tagsResponse.error);
         setTypesError(true);
+        setIsLoadingTypes(false);
         return;
       }
       
-      const tagsData = await tagsResponse.json();
-      console.log('[SearchPage] Tags data received:', tagsData.data?.length || 0, 'tags');
+      console.log('[SearchPage] Tags data received:', tagsResponse.data?.length || 0, 'tags');
       
-      if (tagsData.success || tagsData.ok) {
-        const mappedTags: Tag[] = tagsData.data
+      if (tagsResponse.data) {
+        const mappedTags: Tag[] = tagsResponse.data
           .filter((t: any) => t.category?.toUpperCase() === 'THEME' || t.category === 'Theme')
           .map((t: any) => ({
             id: t.id,
@@ -759,7 +714,7 @@ function SearchPageContent() {
         setIsColdStart(false); // Clear cold start on success
         setRetryAttempt(0);
       } else {
-        console.error('[SearchPage] Tags response not successful. Response data:', tagsData);
+        console.error('[SearchPage] No tags in response. Response data:', tagsResponse.data);
         setTypesError(true);
       }
     } catch (error: any) {
