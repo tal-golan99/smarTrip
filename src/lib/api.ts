@@ -59,24 +59,46 @@ async function getAuthHeaders(): Promise<Record<string, string>> {
 }
 
 /**
- * Generic API fetch wrapper with error handling and authentication
+ * Generic API fetch wrapper with error handling, authentication, timeout, and retry logic
+ * Retries network errors (cold starts, timeouts) automatically
  */
 async function apiFetch<T>(
   endpoint: string,
-  options?: RequestInit
+  options?: RequestInit,
+  retryAttempt = 0
 ): Promise<ApiResponse<T>> {
+  const MAX_RETRIES = 1; // Retry once
+  const RETRY_DELAY = 2500; // 2.5 seconds (gives server time to wake up from cold start)
+  const TIMEOUT_MS = 30000; // 30 second timeout
+  
+  let timeoutId: NodeJS.Timeout | null = null;
+  let controller: AbortController | null = null;
+  
   try {
     // Get auth headers (if user is logged in)
     const authHeaders = await getAuthHeaders();
     
+    // Create abort controller for timeout
+    controller = new AbortController();
+    timeoutId = setTimeout(() => {
+      controller?.abort();
+    }, TIMEOUT_MS);
+    
     const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+      ...options,
+      signal: controller.signal,
       headers: {
         'Content-Type': 'application/json',
         ...authHeaders,
         ...options?.headers,
       },
-      ...options,
     });
+
+    // Clear timeout on successful response
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+      timeoutId = null;
+    }
 
     const data = await response.json();
 
@@ -86,10 +108,54 @@ async function apiFetch<T>(
 
     return data;
   } catch (error) {
+    // Clear timeout if it wasn't cleared
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+      timeoutId = null;
+    }
+    
+    // Determine if error is retryable (network error, timeout, connection refused)
+    const isRetryableError = 
+      error instanceof Error && (
+        error.name === 'AbortError' || // Timeout
+        error.message.includes('fetch') || // Network error
+        error.message.includes('Failed to fetch') || // Chrome/Firefox network error
+        error.message.includes('NetworkError') || // Firefox network error
+        error.message.includes('Network request failed') || // React Native
+        error.message.toLowerCase().includes('connection') || // Connection errors
+        error.message.toLowerCase().includes('refused') || // Connection refused
+        error.message.toLowerCase().includes('timeout') // Timeout errors
+      );
+    
+    // If it's a retryable error AND we haven't exceeded max retries, retry
+    if (isRetryableError && retryAttempt < MAX_RETRIES) {
+      console.log(`[API] Network error detected, retrying in ${RETRY_DELAY}ms... (attempt ${retryAttempt + 1}/${MAX_RETRIES + 1})`);
+      
+      // Wait before retrying (gives server time to wake up from cold start)
+      await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
+      
+      // Retry the request
+      return apiFetch<T>(endpoint, options, retryAttempt + 1);
+    }
+    
+    // Not retryable, or max retries exceeded - return error
     console.error('API Error:', error);
+    
+    // Provide user-friendly error message
+    let errorMessage = 'Unknown error occurred';
+    if (error instanceof Error) {
+      if (error.name === 'AbortError') {
+        errorMessage = 'Request timeout - server is taking too long to respond';
+      } else if (isRetryableError) {
+        errorMessage = 'Cannot connect to server - please try again in a moment';
+      } else {
+        errorMessage = error.message;
+      }
+    }
+    
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Unknown error occurred',
+      error: errorMessage,
     };
   }
 }

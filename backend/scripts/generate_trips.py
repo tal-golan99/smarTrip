@@ -15,7 +15,11 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from database import SessionLocal
-from models import Country, Guide, Tag, Trip, TripTag, TripType, TripStatus, Continent
+# V2 Migration: Use V2 models
+from models_v2 import (
+    Country, Guide, Tag, TripType, TripStatus, Continent,
+    TripTemplate, TripOccurrence, TripTemplateTag, TripTemplateCountry, Company
+)
 from datetime import datetime, timedelta
 import random
 
@@ -112,38 +116,51 @@ TYPE_TO_COUNTRY_LOGIC = {
 }
 
 def generate_500_trips():
-    """Generate exactly 500 trips with proper constraints"""
+    """Generate exactly 500 trip templates with occurrences (V2 Schema)"""
     
     session = SessionLocal()
     
     try:
         print("\n" + "="*70)
-        print("GENERATING 500 TRIPS WITH PROPER CONSTRAINTS")
+        print("GENERATING 500 TRIP TEMPLATES WITH OCCURRENCES (V2 SCHEMA)")
         print("="*70 + "\n")
         
         # Load existing data
-        print("[1/6] Loading existing data...")
+        print("[1/7] Loading existing data...")
         all_countries = session.query(Country).all()
         all_guides = session.query(Guide).all()
         all_trip_types = session.query(TripType).all()
         theme_tags = session.query(Tag).all()
         
+        # Get or create default company
+        default_company = session.query(Company).filter(Company.name == 'Ayala Geographic').first()
+        if not default_company:
+            default_company = Company(
+                name='Ayala Geographic',
+                name_he='איילה גיאוגרפית',
+                description='Leading provider of niche travel experiences worldwide',
+                description_he='ספקית מובילה לחוויית נסיעות נישה ברחבי העולם',
+                is_active=True
+            )
+            session.add(default_company)
+            session.commit()
+        company_id = default_company.id
+        
         print(f"  - {len(all_countries)} countries")
         print(f"  - {len(all_guides)} guides")
         print(f"  - {len(all_trip_types)} trip types")
-        print(f"  - {len(theme_tags)} tags\n")
+        print(f"  - {len(theme_tags)} tags")
+        print(f"  - Company ID: {company_id}\n")
         
         # Create lookup dictionaries
         country_by_name = {c.name: c for c in all_countries}
         tag_by_name = {t.name: t for t in theme_tags}
         
-        # Track trips per type and country
-        trips_per_type = {tt.id: 0 for tt in all_trip_types}
-        trips_per_country = {c.id: 0 for c in all_countries}
+        # Track templates per type and country
+        templates_per_type = {tt.id: 0 for tt in all_trip_types}
+        templates_per_country = {c.id: 0 for c in all_countries}
         
-        all_trips_data = []
-        
-        print("[2/6] Phase 1: Generating at least 50 trips per type (500 total)...\n")
+        print("[2/7] Phase 1: Generating at least 50 templates per type (500 total)...\n")
         
         # Generate 50 trips per type (10 types × 50 = 500 trips)
         for trip_type in all_trip_types:
@@ -160,25 +177,26 @@ def generate_500_trips():
                 print(f"  WARNING: No valid countries for {type_name}, skipping...")
                 continue
             
-            trips_to_generate = 50
-            print(f"  [{type_name}] Generating {trips_to_generate} trips...")
+            templates_to_generate = 50
+            print(f"  [{type_name}] Generating {templates_to_generate} templates...")
             
-            for _ in range(trips_to_generate):
+            for _ in range(templates_to_generate):
                 country = random.choice(valid_countries)
                 guide = random.choice(all_guides)
                 
-                # Generate trip data
+                # Generate template/occurrence data
                 is_private_group = (trip_type.id == 10)  # Private Groups
                 
-                # Date generation
+                # Date generation for occurrence
                 if is_private_group:
                     start_date = datetime(2099, 12, 31).date()
                     end_date = datetime(2099, 12, 31).date()
+                    duration_days = 1
                 else:
                     days_from_now = random.randint(30, 540)  # 1-18 months
                     start_date = datetime.now().date() + timedelta(days=days_from_now)
-                    duration = random.randint(5, 30)
-                    end_date = start_date + timedelta(days=duration)
+                    duration_days = random.randint(5, 30)
+                    end_date = start_date + timedelta(days=duration_days)
                 
                 # Price generation
                 base_price = random.randint(200, 1500) * 10
@@ -188,25 +206,25 @@ def generate_500_trips():
                 if is_private_group:
                     max_capacity = 0
                     spots_left = 0
-                    status = TripStatus.OPEN
+                    status = 'Open'  # V2: status is string
                 else:
                     max_capacity = random.choice([12, 15, 18, 20, 24, 25, 30])
                     spots_left = random.randint(0, max_capacity)
                     
                     if spots_left == 0:
-                        status = TripStatus.FULL
+                        status = 'Full'
                     elif spots_left <= 4:
-                        status = TripStatus.LAST_PLACES
+                        status = 'Last Places'
                     elif spots_left >= max_capacity * 0.8:
-                        status = TripStatus.OPEN
+                        status = 'Open'
                     else:
-                        status = random.choice([TripStatus.GUARANTEED, TripStatus.LAST_PLACES, TripStatus.OPEN])
+                        status = random.choice(['Guaranteed', 'Last Places', 'Open'])
                 
                 difficulty = random.randint(1, 3)
                 
                 # Titles
-                template = random.choice(HEBREW_TITLE_TEMPLATES)
-                title_he = template.format(country.name_he)
+                template_title = random.choice(HEBREW_TITLE_TEMPLATES)
+                title_he = template_title.format(country.name_he)
                 title = f"Discover {country.name}"
                 
                 # Descriptions
@@ -231,64 +249,88 @@ def generate_500_trips():
                     selected_themes = random.sample(available_tags, num_themes)
                     theme_tag_ids = [t.id for t in selected_themes]
                 
-                # Create trip
-                trip = Trip(
+                # V2: Create TripTemplate
+                template = TripTemplate(
                     title=title,
                     title_he=title_he,
                     description=description,
                     description_he=description_he,
-                    start_date=start_date,
-                    end_date=end_date,
-                    price=base_price,
+                    base_price=base_price,
                     single_supplement_price=single_supplement,
-                    max_capacity=max_capacity,
-                    spots_left=spots_left,
-                    status=status,
+                    typical_duration_days=duration_days,
+                    default_max_capacity=max_capacity,
                     difficulty_level=difficulty,
-                    country_id=country.id,
-                    guide_id=guide.id,
-                    trip_type_id=trip_type.id
+                    company_id=company_id,
+                    trip_type_id=trip_type.id,
+                    primary_country_id=country.id,
+                    is_active=True
                 )
-                session.add(trip)
+                session.add(template)
                 session.flush()
                 
-                # Add tags
-                for tag_id in theme_tag_ids:
-                    trip_tag = TripTag(trip_id=trip.id, tag_id=tag_id)
-                    session.add(trip_tag)
+                # V2: Create TripOccurrence
+                occurrence = TripOccurrence(
+                    trip_template_id=template.id,
+                    start_date=start_date,
+                    end_date=end_date,
+                    guide_id=guide.id,
+                    status=status,
+                    spots_left=spots_left,
+                    max_capacity_override=None  # Use template default
+                )
+                session.add(occurrence)
+                session.flush()
                 
-                trips_per_type[trip_type.id] += 1
-                trips_per_country[country.id] += 1
+                # V2: Link country via TripTemplateCountry
+                template_country = TripTemplateCountry(
+                    trip_template_id=template.id,
+                    country_id=country.id,
+                    visit_order=1,
+                    days_in_country=duration_days
+                )
+                session.add(template_country)
+                
+                # V2: Add tags via TripTemplateTag
+                for tag_id in theme_tag_ids:
+                    template_tag = TripTemplateTag(trip_template_id=template.id, tag_id=tag_id)
+                    session.add(template_tag)
+                
+                templates_per_type[trip_type.id] += 1
+                templates_per_country[country.id] += 1
         
         session.commit()
         
-        print(f"\n[3/6] Phase 1 Complete!\n")
+        print(f"\n[3/7] Phase 1 Complete!\n")
         
         # Verify
-        print("[4/6] Verifying trip distribution...\n")
-        trip_count = session.query(Trip).count()
-        print(f"  Total trips generated: {trip_count}")
+        print("[4/7] Verifying template distribution...\n")
+        template_count = session.query(TripTemplate).count()
+        occurrence_count = session.query(TripOccurrence).count()
+        print(f"  Total templates generated: {template_count}")
+        print(f"  Total occurrences generated: {occurrence_count}")
         
-        print(f"\n  Trips per Type:")
+        print(f"\n  Templates per Type:")
         for trip_type in all_trip_types:
-            count = session.query(Trip).filter(Trip.trip_type_id == trip_type.id).count()
-            print(f"    - {trip_type.name}: {count} trips")
+            count = session.query(TripTemplate).filter(TripTemplate.trip_type_id == trip_type.id).count()
+            print(f"    - {trip_type.name}: {count} templates")
         
-        countries_with_no_trips = [c for c in all_countries if trips_per_country[c.id] == 0]
-        if countries_with_no_trips:
-            print(f"\n  WARNING: {len(countries_with_no_trips)} countries have no trips")
+        countries_with_no_templates = [c for c in all_countries if templates_per_country[c.id] == 0]
+        if countries_with_no_templates:
+            print(f"\n  WARNING: {len(countries_with_no_templates)} countries have no templates")
         else:
-            print(f"\n  SUCCESS: All {len(all_countries)} countries have at least 1 trip")
+            print(f"\n  SUCCESS: All {len(all_countries)} countries have at least 1 template")
         
-        print(f"\n[5/6] Generation complete!")
-        print(f"\n[6/6] Final Statistics:")
-        print(f"  - Total Trips: {trip_count}")
-        print(f"  - Countries covered: {len([c for c in all_countries if trips_per_country[c.id] > 0])}/{len(all_countries)}")
-        print(f"  - Min trips per type: {min(trips_per_type.values())}")
-        print(f"  - Max trips per type: {max(trips_per_type.values())}")
+        print(f"\n[5/7] Generation complete!")
+        print(f"\n[6/7] Final Statistics:")
+        print(f"  - Total Templates: {template_count}")
+        print(f"  - Total Occurrences: {occurrence_count}")
+        print(f"  - Countries covered: {len([c for c in all_countries if templates_per_country[c.id] > 0])}/{len(all_countries)}")
+        print(f"  - Min templates per type: {min(templates_per_type.values())}")
+        print(f"  - Max templates per type: {max(templates_per_type.values())}")
         
+        print("\n[7/7] V2 Schema Migration Complete!")
         print("\n" + "="*70)
-        print("TRIP GENERATION COMPLETED SUCCESSFULLY")
+        print("TRIP GENERATION COMPLETED SUCCESSFULLY (V2 SCHEMA)")
         print("="*70 + "\n")
         
     except Exception as e:

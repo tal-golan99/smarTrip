@@ -1,1 +1,0 @@
-"""SmartTrip Test Suite."""

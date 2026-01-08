@@ -1,11 +1,13 @@
 """
 Database configuration and session management
+V2 Schema: Uses models_v2.Base for table creation
 """
 
 import os
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker, scoped_session
-from models import Base
+# V2 Migration: Use V2 Base for table creation
+from models_v2 import Base
 from dotenv import load_dotenv
 
 # Load environment variables

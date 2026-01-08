@@ -9,7 +9,7 @@ const assistant = Assistant({
 });
 
 export const metadata: Metadata = {
-  title: "SmartTrip - מערכת המלצות טיולים",
+  title: "SmarTrip - מערכת המלצות טיולים",
   description: "מערכת המלצות חכמה לטיולים מאורגנים - איילה גיאוגרפית",
 };
 

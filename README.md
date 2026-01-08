@@ -1,6 +1,6 @@
 # SmarTrip
 
-> An intelligent trip recommendation platform that matches travelers with personalized travel experiences using a transparent, rule-based scoring algorithm.
+> An intelligent trip recommendation platform that matches travelers with personalized travel experiences using a rule-based scoring algorithm.
 
 [![Next.js](https://img.shields.io/badge/Next.js-14-black?logo=next.js)](https://nextjs.org/)
 [![React](https://img.shields.io/badge/React-18-61DAFB?logo=react)](https://react.dev/)
@@ -15,9 +15,10 @@
 
 ## Key Features
 
-- **Two-Tier Search Algorithm** - Primary tier applies strict filters; relaxed tier automatically expands criteria when results are sparse
-- **Bilingual Support** - Full Hebrew and English content with RTL layout support
-- **Event Analytics** - Built-in tracking for search behavior, impressions, and user interactions
+- **Intelligent Search** - Personalized trip recommendations based on user preferences
+- **Flexible Filtering** - Advanced search with multiple criteria including location, budget, duration, and difficulty
+- **User Analytics** - Comprehensive tracking and analytics for search behavior and user interactions
+- **Bilingual Support** - Full support for Hebrew and English content
 
 ---
 
@@ -118,17 +119,24 @@ Create `backend/.env`:
 ```env
 FLASK_APP=app.py
 FLASK_ENV=development
-SECRET_KEY=your-secret-key
+SECRET_KEY=your-secret-key-here
 DATABASE_URL=postgresql://user:password@localhost:5432/smarttrip
 ALLOWED_ORIGINS=http://localhost:3000
 ```
 
+**Note:** For production, use your Supabase PostgreSQL connection string as the `DATABASE_URL`. The application will connect directly to your Supabase database.
+
 Initialize database and start:
 
 ```bash
-python scripts/seed.py    # Seed initial data
-python app.py             # Start dev server on :5000
+# For local development with empty database (optional)
+python scripts/seed.py
+
+# Start development server
+python app.py
 ```
+
+**Note:** In production, the application connects directly to your Supabase database. The seed script is only for local development with an empty database.
 
 ### 3. Frontend Setup
 
@@ -149,7 +157,7 @@ NEXT_PUBLIC_SUPABASE_URL=https://your-project-id.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key-here
 ```
 
-**Note:** If you don't set the Supabase variables, the app will work in guest mode (users can continue without signing in).
+**Note:** Supabase authentication is optional. If not configured, the app operates in guest mode, allowing users to browse and search trips without authentication.
 
 Start development server:
 
@@ -194,18 +202,20 @@ Base URL: `http://localhost:5000/api`
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| `GET` | `/health` | Health check with DB stats |
+| `GET` | `/health` | Health check endpoint |
+| `POST` | `/recommendations` | Get personalized trip recommendations |
 
-### Trip Resources
+### Resource Endpoints
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| `GET` | `/trips` | List all trips |
-| `GET` | `/trips/:id` | Get trip by ID |
+| `GET` | `/trips` | List available trips |
+| `GET` | `/trips/:id` | Get trip details by ID |
 | `GET` | `/countries` | List all countries |
-| `GET` | `/trip-types` | List trip categories |
+| `GET` | `/trip-types` | List trip type categories |
 | `GET` | `/tags` | List theme tags |
 | `GET` | `/guides` | List tour guides |
+| `GET` | `/companies` | List trip providers |
 
 ### Recommendations
 
@@ -239,17 +249,11 @@ Content-Type: application/json
   "count": 10,
   "primary_count": 7,
   "relaxed_count": 3,
-  "score_thresholds": { "HIGH": 70, "MID": 50 },
   "data": [
     {
       "id": 517,
       "title": "Japan Cultural Discovery",
       "match_score": 88,
-      "match_details": [
-        "Excellent Theme Match [+25]",
-        "Perfect Difficulty [+15]",
-        "Country Match [+15]"
-      ],
       "is_relaxed": false
     }
   ]
@@ -260,22 +264,17 @@ Content-Type: application/json
 
 ## Recommendation Algorithm
 
-The scoring engine uses weighted signals to rank trips:
+The recommendation engine uses a multi-factor scoring algorithm to rank trips based on user preferences. The algorithm considers:
 
-| Signal | Points | Condition |
-|--------|--------|-----------|
-| Base Score | +35 | Passes hard filters |
-| Theme Match (2+) | +25 | Multiple theme overlap |
-| Theme Match (1) | +12 | Single theme overlap |
-| Theme Penalty | -15 | No theme overlap |
-| Difficulty | +15 | Exact match |
-| Duration | +12 / +8 | Ideal / Good fit |
-| Budget | +12 / +8 / +5 | Perfect / Good / Acceptable |
-| Geography | +15 / +5 | Country / Continent match |
-| Status Bonus | +15 / +7 | Last Places / Guaranteed |
-| Departing Soon | +7 | Within 30 days |
+- **Geographic preferences** - Countries and continents
+- **Trip characteristics** - Type, themes, difficulty level
+- **Temporal constraints** - Duration, departure dates
+- **Budget alignment** - Price matching within acceptable range
+- **Availability status** - Guaranteed departures and limited availability
 
-Scores are clamped to 0-100. When primary results are fewer than 6, relaxed search expands filters with a -20 base penalty.
+Results are presented with match scores ranging from 0-100. When initial results are limited, the system automatically expands search criteria to provide additional recommendations.
+
+For detailed algorithm documentation, see `docs/RECOMMENDATION_ENGINE_COMPREHENSIVE.md`.
 
 ---
 
@@ -290,39 +289,57 @@ trip-recommendations/
 |   +-- lib/
 |       +-- api.ts              # API client
 +-- backend/
-|   +-- app.py                  # Flask application + scoring config
-|   +-- models.py               # SQLAlchemy ORM models
-|   +-- database.py             # DB session management
-|   +-- scripts/                # Seeding, evaluation, analytics
-|   +-- events/                 # Event tracking module
-|   +-- scheduler.py            # Background jobs
-+-- tests/
-|   +-- backend/                # API and algorithm tests
-|   +-- integration/            # End-to-end scenarios
-|   +-- e2e/                    # Playwright UI tests
+|   +-- app.py                  # Flask application entry point
+|   +-- api_v2.py               # REST API endpoints  
+|   +-- models_v2.py            # Database models
+|   +-- database.py             # Database connection management
+|   +-- auth_supabase.py        # Authentication middleware
+|   +-- scheduler.py            # Background job scheduler
+|   +-- events/                 # User event tracking
+|   |   +-- api.py              # Event endpoints
+|   |   +-- models.py           # Event models
+|   |   +-- service.py          # Event processing
+|   +-- recommender/            # Recommendation system
+|   |   +-- logging.py          # Request logging
+|   |   +-- metrics.py          # Performance metrics
+|   |   +-- evaluation.py       # Quality evaluation
+|   +-- scenarios/              # Test scenarios
+|   +-- scripts/                # Development utilities
+|   |   +-- seed.py             # Database seeding
+|   |   +-- generate_trips.py   # Test data generation
+|   |   +-- export_data.py      # Data export
+|   |   +-- verify_schema.py    # Schema validation
 +-- docs/                       # Technical documentation
+|   +-- archive/                # Archived migrations & backups
 +-- render.yaml                 # Render deployment config
++-- pytest.ini                  # Pytest configuration 
 ```
 
 ---
 
 ## Deployment
 
-### Render (Backend)
+### Backend (Render)
 
-The `render.yaml` configures:
-- Python web service with Gunicorn
-- PostgreSQL database
-- Environment variables
+1. Connect your repository to Render
+2. Create a new Web Service using the `render.yaml` configuration
+3. Set environment variables in Render dashboard:
+   - `DATABASE_URL` - Your Supabase PostgreSQL connection string
+   - `SECRET_KEY` - Flask secret key
+   - `ALLOWED_ORIGINS` - Your frontend domain (e.g., `https://your-app.vercel.app`)
+   - `FLASK_ENV=production`
+4. Deploy
 
-Set `ALLOWED_ORIGINS` in the Render dashboard to your Vercel domain.
+The backend will automatically initialize the database schema on first deployment.
 
-### Vercel (Frontend)
+### Frontend (Vercel)
 
 1. Import repository to Vercel
-2. Set environment variable:
+2. Set environment variables:
    ```
    NEXT_PUBLIC_API_URL=https://your-backend.onrender.com
+   NEXT_PUBLIC_SUPABASE_URL=https://your-project-id.supabase.co
+   NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key-here
    ```
 3. Deploy
 

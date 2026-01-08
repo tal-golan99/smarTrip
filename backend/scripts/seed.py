@@ -13,7 +13,11 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from database import SessionLocal, init_db
-from models import Country, Guide, Tag, Trip, TripTag, TripType, Continent, Gender, TripStatus
+# V2 Migration: Use V2 models instead of V1
+from models_v2 import (
+    Country, Guide, Tag, TripType, Continent, Gender, TripStatus,
+    TripTemplate, TripOccurrence, TripTemplateTag, TripTemplateCountry, Company
+)
 # Note: TagCategory enum was removed - Tags now only contain THEME tags
 from faker import Faker
 from datetime import datetime, timedelta
@@ -44,10 +48,10 @@ TYPE_TO_COUNTRY_LOGIC = {
 
 
 def seed_database():
-    """Seed the database with realistic data using TripType logic"""
+    """Seed the database with realistic data using TripType logic (V2 Schema: Templates + Occurrences)"""
     
     print("\n" + "="*70)
-    print("SMARTRIP DATABASE SEED - WITH TRIPTYPE FOREIGN KEY LOGIC")
+    print("SMARTRIP DATABASE SEED - V2 SCHEMA (Templates + Occurrences)")
     print("="*70 + "\n")
     
     # Initialize database (create tables)
@@ -57,6 +61,25 @@ def seed_database():
     session = SessionLocal()
     
     try:
+        # ============================================
+        # CREATE DEFAULT COMPANY (V2 Requirement)
+        # ============================================
+        print("[SEEDING] Default Company...")
+        default_company = session.query(Company).filter(Company.name == 'Ayala Geographic').first()
+        if not default_company:
+            default_company = Company(
+                name='Ayala Geographic',
+                name_he='איילה גיאוגרפית',
+                description='Leading provider of niche travel experiences worldwide',
+                description_he='ספקית מובילה לחוויית נסיעות נישה ברחבי העולם',
+                is_active=True
+            )
+            session.add(default_company)
+            session.commit()
+            print("SUCCESS: Created default company 'Ayala Geographic'\n")
+        else:
+            print("SUCCESS: Default company already exists\n")
+        company_id = default_company.id
         # ============================================
         # SEED COUNTRIES (Including Antarctica)
         # ============================================
@@ -534,41 +557,71 @@ def seed_database():
         
         print(f"\nSUCCESS: Phase 2 Complete - {len(countries_needing_trips)} countries filled\n")
         
-        # PHASE 3: Save all trips to database
-        print("PHASE 3: Saving trips to database...\n")
+        # PHASE 3: Save all trips to database (V2: Templates + Occurrences)
+        print("PHASE 3: Saving trips to database (V2 Schema)...\n")
         
         for idx, trip_data in enumerate(all_generated_trips, 1):
-            trip = Trip(
+            # Calculate duration for template
+            duration_days = (trip_data['end_date'] - trip_data['start_date']).days
+            if duration_days <= 0:
+                duration_days = 1  # Default for Private Groups
+            
+            # Create TripTemplate (reusable definition)
+            template = TripTemplate(
                 title=trip_data['title'],
                 title_he=trip_data['title_he'],
                 description=trip_data['description'],
                 description_he=trip_data['description_he'],
-                start_date=trip_data['start_date'],
-                end_date=trip_data['end_date'],
-                price=trip_data['price'],
+                base_price=trip_data['price'],
                 single_supplement_price=trip_data['single_supplement'],
-                max_capacity=trip_data['max_capacity'],
-                spots_left=trip_data['spots_left'],
-                status=trip_data['status'],
+                typical_duration_days=duration_days,
+                default_max_capacity=trip_data['max_capacity'],
                 difficulty_level=trip_data['difficulty'],
-                country_id=trip_data['country_id'],
-                guide_id=trip_data['guide_id'],
-                trip_type_id=trip_data['trip_type_id']  # Foreign Key to TripType
+                company_id=company_id,
+                trip_type_id=trip_data['trip_type_id'],
+                primary_country_id=trip_data['country_id'],
+                is_active=True
             )
-            session.add(trip)
+            session.add(template)
             session.flush()
             
-            # Add theme tags (many-to-many)
+            # Create TripOccurrence (specific instance)
+            occurrence = TripOccurrence(
+                trip_template_id=template.id,
+                start_date=trip_data['start_date'],
+                end_date=trip_data['end_date'],
+                guide_id=trip_data['guide_id'],
+                status=trip_data['status'].value if hasattr(trip_data['status'], 'value') else str(trip_data['status']),
+                spots_left=trip_data['spots_left'],
+                max_capacity_override=None  # Use template default
+            )
+            session.add(occurrence)
+            session.flush()
+            
+            # Link country via TripTemplateCountry (V2 multi-country support)
+            template_country = TripTemplateCountry(
+                trip_template_id=template.id,
+                country_id=trip_data['country_id'],
+                visit_order=1,
+                days_in_country=duration_days
+            )
+            session.add(template_country)
+            
+            # Link theme tags via TripTemplateTag (V2)
             for theme_tag_id in trip_data['theme_tag_ids']:
-                trip_tag = TripTag(trip_id=trip.id, tag_id=theme_tag_id)
-                session.add(trip_tag)
+                template_tag = TripTemplateTag(
+                    trip_template_id=template.id,
+                    tag_id=theme_tag_id
+                )
+                session.add(template_tag)
             
             if idx % 50 == 0:
-                print(f"  ... {idx} trips saved")
+                print(f"  ... {idx} trip templates saved")
         
         session.commit()
-        trip_count = session.query(Trip).count()
-        print(f"\nSUCCESS: Saved {trip_count} trips to database\n")
+        template_count = session.query(TripTemplate).count()
+        occurrence_count = session.query(TripOccurrence).count()
+        print(f"\nSUCCESS: Saved {template_count} trip templates and {occurrence_count} occurrences to database\n")
         
         # ============================================
         # FINAL SUMMARY
@@ -581,13 +634,14 @@ def seed_database():
         print(f"   - Trip Types: {type_count}")
         print(f"   - Theme Tags: {theme_count}")
         print(f"   - Guides: {guide_count}")
-        print(f"   - Trips: {trip_count}")
+        print(f"   - Trip Templates: {template_count}")
+        print(f"   - Trip Occurrences: {occurrence_count}")
         
-        # Show trips per type
-        print(f"\nTrips per Type:")
+        # Show templates per type
+        print(f"\nTrip Templates per Type:")
         for trip_type in all_trip_types:
-            count = session.query(Trip).filter(Trip.trip_type_id == trip_type.id).count()
-            print(f"   - {trip_type.name}: {count} trips")
+            count = session.query(TripTemplate).filter(TripTemplate.trip_type_id == trip_type.id).count()
+            print(f"   - {trip_type.name}: {count} templates")
         
         print(f"\nSUCCESS: All countries have at least 1 trip!")
         print(f"SUCCESS: Database ready for production!\n")

@@ -13,7 +13,11 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import csv
 from database import SessionLocal
-from models import Country, Guide, Tag, Trip, TripTag, TripType
+# V2 Migration: Use V2 models
+from models_v2 import (
+    Country, Guide, Tag, TripType,
+    TripTemplate, TripOccurrence, TripTemplateTag, TripTemplateCountry, Company
+)
 
 def export_to_csv():
     """Export all database tables to CSV files"""
@@ -60,14 +64,14 @@ def export_to_csv():
         tags = session.query(Tag).all()
         with open('data/tags.csv', 'w', newline='', encoding='utf-8') as f:
             writer = csv.writer(f)
-            writer.writerow(['id', 'name', 'name_he', 'description', 'category'])
+            # V2: category column removed - all tags are theme tags
+            writer.writerow(['id', 'name', 'name_he', 'description'])
             for tag in tags:
                 writer.writerow([
                     tag.id,
                     tag.name,
                     tag.name_he,
-                    tag.description or '',
-                    tag.category.value if tag.category else ''
+                    tag.description or ''
                 ])
         print(f"   [OK] Exported {len(tags)} tags\n")
         
@@ -92,18 +96,35 @@ def export_to_csv():
                 ])
         print(f"   [OK] Exported {len(guides)} guides\n")
         
-        # Export Trips
-        print("[5/5] Exporting Trips...")
-        trips = session.query(Trip).all()
-        with open('data/trips.csv', 'w', newline='', encoding='utf-8') as f:
+        # Export Companies (V2)
+        print("[5/7] Exporting Companies...")
+        companies = session.query(Company).all()
+        with open('data/companies.csv', 'w', newline='', encoding='utf-8') as f:
+            writer = csv.writer(f)
+            writer.writerow(['id', 'name', 'name_he', 'description', 'description_he', 'is_active'])
+            for c in companies:
+                writer.writerow([
+                    c.id,
+                    c.name,
+                    c.name_he,
+                    c.description.replace('\n', ' ') if c.description else '',
+                    c.description_he.replace('\n', ' ') if c.description_he else '',
+                    c.is_active
+                ])
+        print(f"   [OK] Exported {len(companies)} companies\n")
+        
+        # Export Trip Templates (V2)
+        print("[6/7] Exporting Trip Templates...")
+        templates = session.query(TripTemplate).all()
+        with open('data/trip_templates.csv', 'w', newline='', encoding='utf-8') as f:
             writer = csv.writer(f)
             writer.writerow([
                 'id', 'title', 'title_he', 'description', 'description_he',
-                'image_url', 'start_date', 'end_date', 'price', 'single_supplement_price',
-                'max_capacity', 'spots_left', 'status', 'difficulty_level',
-                'country_id', 'guide_id', 'trip_type_id'
+                'image_url', 'base_price', 'single_supplement_price',
+                'typical_duration_days', 'default_max_capacity', 'difficulty_level',
+                'company_id', 'trip_type_id', 'primary_country_id', 'is_active'
             ])
-            for t in trips:
+            for t in templates:
                 writer.writerow([
                     t.id,
                     t.title,
@@ -111,40 +132,81 @@ def export_to_csv():
                     t.description.replace('\n', ' ') if t.description else '',
                     t.description_he.replace('\n', ' ') if t.description_he else '',
                     t.image_url or '',
-                    t.start_date,
-                    t.end_date,
-                    t.price,
-                    t.single_supplement_price,
-                    t.max_capacity,
-                    t.spots_left,
-                    t.status.value if t.status else '',
+                    t.base_price,
+                    t.single_supplement_price or '',
+                    t.typical_duration_days,
+                    t.default_max_capacity,
                     t.difficulty_level,
-                    t.country_id,
-                    t.guide_id,
-                    t.trip_type_id
+                    t.company_id,
+                    t.trip_type_id or '',
+                    t.primary_country_id or '',
+                    t.is_active
                 ])
-        print(f"   [OK] Exported {len(trips)} trips\n")
+        print(f"   [OK] Exported {len(templates)} trip templates\n")
         
-        # Export Trip-Tag Relationships
-        print("[6/6] Exporting Trip-Tag Relationships...")
-        trip_tags = session.query(TripTag).all()
-        with open('data/trip_tags.csv', 'w', newline='', encoding='utf-8') as f:
+        # Export Trip Occurrences (V2)
+        print("[7/7] Exporting Trip Occurrences...")
+        occurrences = session.query(TripOccurrence).all()
+        with open('data/trip_occurrences.csv', 'w', newline='', encoding='utf-8') as f:
             writer = csv.writer(f)
-            writer.writerow(['trip_id', 'tag_id'])
-            for tt in trip_tags:
-                writer.writerow([tt.trip_id, tt.tag_id])
-        print(f"   [OK] Exported {len(trip_tags)} trip-tag relationships\n")
+            writer.writerow([
+                'id', 'trip_template_id', 'start_date', 'end_date',
+                'guide_id', 'status', 'spots_left',
+                'price_override', 'single_supplement_override', 'max_capacity_override'
+            ])
+            for o in occurrences:
+                writer.writerow([
+                    o.id,
+                    o.trip_template_id,
+                    o.start_date,
+                    o.end_date,
+                    o.guide_id or '',
+                    o.status,
+                    o.spots_left,
+                    o.price_override or '',
+                    o.single_supplement_override or '',
+                    o.max_capacity_override or ''
+                ])
+        print(f"   [OK] Exported {len(occurrences)} trip occurrences\n")
+        
+        # Export Template-Tag Relationships (V2)
+        print("[8/8] Exporting Template-Tag Relationships...")
+        template_tags = session.query(TripTemplateTag).all()
+        with open('data/trip_template_tags.csv', 'w', newline='', encoding='utf-8') as f:
+            writer = csv.writer(f)
+            writer.writerow(['trip_template_id', 'tag_id'])
+            for tt in template_tags:
+                writer.writerow([tt.trip_template_id, tt.tag_id])
+        print(f"   [OK] Exported {len(template_tags)} template-tag relationships\n")
+        
+        # Export Template-Country Relationships (V2)
+        print("[9/9] Exporting Template-Country Relationships...")
+        template_countries = session.query(TripTemplateCountry).all()
+        with open('data/trip_template_countries.csv', 'w', newline='', encoding='utf-8') as f:
+            writer = csv.writer(f)
+            writer.writerow(['trip_template_id', 'country_id', 'visit_order', 'days_in_country'])
+            for tc in template_countries:
+                writer.writerow([
+                    tc.trip_template_id,
+                    tc.country_id,
+                    tc.visit_order,
+                    tc.days_in_country or ''
+                ])
+        print(f"   [OK] Exported {len(template_countries)} template-country relationships\n")
         
         print("="*70)
-        print("EXPORT COMPLETE!")
+        print("EXPORT COMPLETE! (V2 SCHEMA)")
         print("="*70)
         print(f"\nFiles created:")
         print(f"  - data/countries.csv ({len(countries)} rows)")
         print(f"  - data/trip_types.csv ({len(trip_types)} rows)")
         print(f"  - data/tags.csv ({len(tags)} rows)")
         print(f"  - data/guides.csv ({len(guides)} rows)")
-        print(f"  - data/trips.csv ({len(trips)} rows)")
-        print(f"  - data/trip_tags.csv ({len(trip_tags)} rows)")
+        print(f"  - data/companies.csv ({len(companies)} rows)")
+        print(f"  - data/trip_templates.csv ({len(templates)} rows)")
+        print(f"  - data/trip_occurrences.csv ({len(occurrences)} rows)")
+        print(f"  - data/trip_template_tags.csv ({len(template_tags)} rows)")
+        print(f"  - data/trip_template_countries.csv ({len(template_countries)} rows)")
         print("\n")
         
     finally:

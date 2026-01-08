@@ -81,11 +81,13 @@ function AuthPageContent() {
         }
 
         // Sign up
+        // Get the correct origin (production or localhost)
+        const origin = typeof window !== 'undefined' ? window.location.origin : '';
         const { data, error: signUpError } = await supabase.auth.signUp({
           email,
           password,
           options: {
-            emailRedirectTo: `${window.location.origin}/auth?redirect=/search`,
+            emailRedirectTo: `${origin}/auth?redirect=/search`,
           },
         });
 
@@ -135,10 +137,23 @@ function AuthPageContent() {
 
     try {
       const redirectTo = searchParams.get('redirect') || '/search';
+      
+      // Get the correct origin (production or localhost)
+      // In production, window.location.origin will be the Vercel URL
+      // In development, it will be http://localhost:3000
+      // IMPORTANT: Make sure your production URL is added to Supabase Dashboard:
+      // Settings → Authentication → URL Configuration → Redirect URLs
+      const origin = typeof window !== 'undefined' ? window.location.origin : '';
+      
+      // Build the callback URL - must match one of the URLs configured in Supabase Dashboard
+      const callbackUrl = `${origin}/auth/callback?redirect=${encodeURIComponent(redirectTo)}`;
+      
+      console.log('[Auth] Google OAuth redirect URL:', callbackUrl);
+      
       const { error: oauthError } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: `${window.location.origin}/auth/callback?redirect=${encodeURIComponent(redirectTo)}`,
+          redirectTo: callbackUrl,
         },
       });
 

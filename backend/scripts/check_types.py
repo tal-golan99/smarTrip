@@ -9,7 +9,8 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from database import SessionLocal
-from models import TripType, Trip, Country
+# V2 Migration: Use V2 models - TripTemplate instead of Trip
+from models_v2 import TripType, TripTemplate, Country
 
 session = SessionLocal()
 
@@ -21,17 +22,20 @@ try:
     trip_types = session.query(TripType).order_by(TripType.id).all()
     
     for tt in trip_types:
-        trip_count = session.query(Trip).filter(Trip.trip_type_id == tt.id).count()
-        print(f"ID {tt.id}: {tt.name} ({tt.name_he}) - {trip_count} trips")
+        # V2: Count TripTemplates instead of Trips
+        template_count = session.query(TripTemplate).filter(TripTemplate.trip_type_id == tt.id).count()
+        print(f"ID {tt.id}: {tt.name} ({tt.name_he}) - {template_count} templates")
         
         # Show a few sample countries for this type
-        sample_trips = session.query(Trip).filter(Trip.trip_type_id == tt.id).limit(5).all()
-        if sample_trips:
+        sample_templates = session.query(TripTemplate).filter(TripTemplate.trip_type_id == tt.id).limit(5).all()
+        if sample_templates:
             countries = []
-            for trip in sample_trips:
-                country = session.query(Country).filter(Country.id == trip.country_id).first()
-                if country:
-                    countries.append(country.name)
+            for template in sample_templates:
+                # V2: Get primary country or first country from junction table
+                if template.primary_country:
+                    countries.append(template.primary_country.name)
+                elif template.template_countries:
+                    countries.append(template.template_countries[0].country.name)
             print(f"  Sample countries: {', '.join(countries)}")
         print()
     
@@ -41,14 +45,15 @@ try:
     if type_4:
         print(f"ID 4 = {type_4.name} ({type_4.name_he})")
         
-        # Check if there are trips in Canada with type_id=4
+        # Check if there are templates in Canada with type_id=4
         canada = session.query(Country).filter(Country.name == 'Canada').first()
         if canada:
-            canada_trips_type4 = session.query(Trip).filter(
-                Trip.trip_type_id == 4,
-                Trip.country_id == canada.id
+            # V2: Check TripTemplates with primary_country or via junction table
+            canada_templates_type4 = session.query(TripTemplate).filter(
+                TripTemplate.trip_type_id == 4,
+                TripTemplate.primary_country_id == canada.id
             ).count()
-            print(f"Trips with type_id=4 in Canada: {canada_trips_type4}")
+            print(f"Templates with type_id=4 in Canada: {canada_templates_type4}")
     
     print("\nChecking African Safari:")
     safari = session.query(TripType).filter(TripType.name == 'African Safari').first()

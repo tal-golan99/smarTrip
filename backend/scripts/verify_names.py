@@ -9,7 +9,8 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from database import SessionLocal
-from models import TripType
+# V2 Migration: Use V2 models
+from models_v2 import TripType
 
 # Frontend expected names
 FRONTEND_NAMES = {

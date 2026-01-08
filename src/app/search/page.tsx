@@ -1073,10 +1073,7 @@ function SearchPageContent() {
             שגיאת חיבור לשרת
           </h2>
           <div className="text-gray-600 mb-6 space-y-2 text-sm">
-            <p>לא ניתן להתחבר לשרת: <code className="bg-gray-100 px-2 py-1 rounded text-xs">{API_URL}</code></p>
-            <p className="text-xs text-gray-500">
-              בדוק שהשרת פועל: פתח <a href={`${API_URL}/api/health`} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">קישור זה</a> בדפדפן
-            </p>
+            <p>נסה לרענן את הדף בעוד כמה רגעים</p>
           </div>
           <button
             onClick={retryFetchData}
