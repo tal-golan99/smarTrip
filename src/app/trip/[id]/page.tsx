@@ -69,9 +69,11 @@ const getTripField = (trip: Trip, snakeCase: string, camelCase: string): any => 
 };
 
 // Generate dynamic background image based on country
+import { getDynamicImageUrl } from '@/lib/imageUtils';
+
 const getDynamicImage = (trip: Trip): string => {
-  const countryName = trip.country?.name || 'landscape';
-  return `https://image.pollinations.ai/prompt/beautiful%20landscape%20view%20of%20${encodeURIComponent(countryName)}%20travel%20destination?width=1200&height=600&nologo=true`;
+  const countryName = trip.country?.name;
+  return getDynamicImageUrl(countryName);
 };
 
 // Format date to DD.MM.YYYY

@@ -148,6 +148,12 @@ export function useImpressionTracking(
         return;
       }
       
+      // Verify element is a valid Node before observing
+      if (!(element instanceof Node)) {
+        console.warn('[Tracking] Element is not a valid Node, skipping observation');
+        return;
+      }
+      
       // Create IntersectionObserver
       observerRef.current = new IntersectionObserver(
         (entries) => {
@@ -167,7 +173,11 @@ export function useImpressionTracking(
         }
       );
       
-      observerRef.current.observe(element);
+      try {
+        observerRef.current.observe(element);
+      } catch (error) {
+        console.warn('[Tracking] Failed to observe element:', error);
+      }
     },
     [tripId, position, score, source]
   );

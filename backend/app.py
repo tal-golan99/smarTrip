@@ -4,6 +4,7 @@ Smart Recommendation Engine for Niche Travel
 """
 
 import os
+import requests
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 from dotenv import load_dotenv
@@ -251,7 +252,7 @@ def manual_seed():
         scripts_path = os.path.join(os.path.dirname(__file__), 'scripts')
         if scripts_path not in sys.path:
             sys.path.insert(0, scripts_path)
-        from seed import seed_database
+        from seed import seed_database  # type: ignore[import-untyped]
         
         print("[SEED] Seeding database with programmatically generated data (DEV ONLY)", flush=True)
         seed_database()
@@ -545,6 +546,174 @@ def get_tags():
 # All functionality is available in /api/v2/* endpoints.
 #
 # ============================================
+# PIXABAY IMAGE API ENDPOINT
+# ============================================
+
+# In-memory cache for country images (simple dict)
+# Key: country name (normalized), Value: {url: str, expires_at: datetime}
+_country_image_cache = {}
+
+def _get_pixabay_image_url(country_name: str, width: int = 1200, height: int = 600) -> str:
+    """
+    Fetch landscape image URL from Pixabay API for a country.
+    
+    Returns placeholder URL if API fails or key is missing.
+    """
+    pixabay_key = os.getenv('PIXABAY_API_KEY')
+    
+    # Fallback if no API key
+    if not pixabay_key:
+        print(f"[PIXABAY] No API key configured, using placeholder for {country_name}", flush=True)
+        encoded_country = requests.utils.quote(country_name)
+        # Use placehold.co as it's more reliable than via.placeholder.com
+        return f"https://placehold.co/{width}x{height}/4A90E2/FFFFFF?text={encoded_country}"
+    
+    # Build Pixabay API query
+    query = f"{country_name} landscape travel"
+    pixabay_url = "https://pixabay.com/api/"
+    
+    params = {
+        'key': pixabay_key,
+        'q': query,
+        'image_type': 'photo',
+        'category': 'places',
+        'safesearch': 'true',
+        'orientation': 'horizontal',
+        'min_width': width,
+        'per_page': 3  # Get a few results, we'll use the first one
+    }
+    
+    try:
+        response = requests.get(pixabay_url, params=params, timeout=5)
+        response.raise_for_status()
+        data = response.json()
+        
+        # Check if we got results
+        if data.get('totalHits', 0) > 0:
+            hits = data.get('hits', [])
+            if hits and len(hits) > 0:
+                # Use first result (deterministic - always same country = same image)
+                image_url = hits[0].get('webformatURL') or hits[0].get('largeImageURL')
+                if image_url:
+                    print(f"[PIXABAY] Found image for {country_name}: {image_url[:50]}...", flush=True)
+                    return image_url
+        
+        # No results found - use placeholder
+        print(f"[PIXABAY] No results found for {country_name}, using placeholder", flush=True)
+        encoded_country = requests.utils.quote(country_name)
+        return f"https://placehold.co/{width}x{height}/4A90E2/FFFFFF?text={encoded_country}"
+    
+    except requests.exceptions.RequestException as e:
+        print(f"[PIXABAY] Error fetching image for {country_name}: {e}", flush=True)
+        # Fallback to placeholder
+        encoded_country = requests.utils.quote(country_name)
+        return f"https://placehold.co/{width}x{height}/4A90E2/FFFFFF?text={encoded_country}"
+    except Exception as e:
+        print(f"[PIXABAY] Unexpected error for {country_name}: {e}", flush=True)
+        encoded_country = requests.utils.quote(country_name)
+        return f"https://placehold.co/{width}x{height}/4A90E2/FFFFFF?text={encoded_country}"
+
+
+@app.route('/api/images/country/<country_name>', methods=['GET'])
+def get_country_image(country_name: str):
+    """
+    Get landscape image URL for a country using Pixabay API.
+    
+    Uses in-memory caching with 7-day TTL to reduce API calls.
+    Falls back to placeholder if Pixabay API fails or key is missing.
+    
+    Query params:
+    - width: Image width (default: 1200)
+    - height: Image height (default: 600)
+    - redirect: If 'true', redirects directly to image URL (for <img> src)
+    - format: 'json' (default) or 'redirect'
+    """
+    from datetime import datetime, timedelta
+    from flask import redirect
+    
+    # Get optional width/height params
+    width = request.args.get('width', default=1200, type=int)
+    height = request.args.get('height', default=600, type=int)
+    redirect_param = request.args.get('redirect', 'false').lower() == 'true'
+    format_param = request.args.get('format', 'json').lower()
+    
+    # Normalize country name (lowercase for cache key)
+    country_normalized = country_name.strip().lower()
+    cache_key = f"{country_normalized}:{width}x{height}"
+    
+    # Check cache first
+    if cache_key in _country_image_cache:
+        cached_entry = _country_image_cache[cache_key]
+        if cached_entry['expires_at'] > datetime.now():
+            print(f"[PIXABAY] Cache hit for {country_name}", flush=True)
+            image_url = cached_entry['url']
+            
+            # If redirect requested, return redirect response
+            if redirect_param or format_param == 'redirect':
+                return redirect(image_url, code=302)
+            
+            # Otherwise return JSON
+            return jsonify({
+                'success': True,
+                'url': image_url,
+                'country': country_name,
+                'cached': True
+            }), 200
+        else:
+            # Cache expired, remove it
+            del _country_image_cache[cache_key]
+    
+    # Cache miss or expired - fetch from Pixabay
+    print(f"[PIXABAY] Cache miss for {country_name}, fetching from API", flush=True)
+    image_url = _get_pixabay_image_url(country_name, width, height)
+    
+    # Cache the result (7 days TTL)
+    _country_image_cache[cache_key] = {
+        'url': image_url,
+        'expires_at': datetime.now() + timedelta(days=7)
+    }
+    
+    # Clean up expired cache entries (simple cleanup - remove old entries)
+    # This prevents memory leak if many countries are requested
+    if len(_country_image_cache) > 100:  # Only clean if cache is large
+        now = datetime.now()
+        expired_keys = [k for k, v in _country_image_cache.items() if v['expires_at'] <= now]
+        for key in expired_keys:
+            del _country_image_cache[key]
+    
+    # If redirect requested, return redirect response
+    if redirect_param or format_param == 'redirect':
+        return redirect(image_url, code=302)
+    
+    # Otherwise return JSON
+    return jsonify({
+        'success': True,
+        'url': image_url,
+        'country': country_name,
+        'cached': False
+    }), 200
+
+
+# ============================================
+# DEBUG ENDPOINT (Remove after testing)
+# ============================================
+
+@app.route('/api/debug/pixabay-key', methods=['GET'])
+def debug_pixabay_key():
+    """
+    Debug endpoint to check if PIXABAY_API_KEY is loaded.
+    Remove this endpoint after confirming everything works.
+    """
+    key = os.getenv('PIXABAY_API_KEY')
+    return jsonify({
+        'key_exists': bool(key),
+        'key_length': len(key) if key else 0,
+        'key_preview': (key[:10] + '...') if key and len(key) > 10 else ('N/A' if not key else key),
+        'message': 'Key loaded successfully' if key else 'Key not found - check Render environment variables'
+    }), 200
+
+
+# ============================================
 # ERROR HANDLERS
 # ============================================
 
@@ -615,8 +784,8 @@ def get_daily_metrics():
     Returns list of daily metrics.
     """
     if not LOGGING_ENABLED:
-        return jsonify({
-            'success': False,
+            return jsonify({
+                'success': False,
             'error': 'Metrics module not available'
         }), 503
     
@@ -780,8 +949,8 @@ def get_evaluation_scenarios():
                 'expected_min_results': s.get('expected_min_results'),
             })
         
-        return jsonify({
-            'success': True,
+            return jsonify({
+                'success': True,
             'count': len(scenario_list),
             'data': scenario_list
         }), 200

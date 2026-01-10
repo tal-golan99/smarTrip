@@ -137,11 +137,11 @@ const getStatusIcon = (status?: string) => {
 };
 
 // Generate dynamic background image based on country
+import { getDynamicImageUrl } from '@/lib/imageUtils';
+
 const getDynamicImage = (trip: Trip): string => {
-  // Try to get country name for dynamic image
-  const countryName = trip.country?.name || 'landscape';
-  // Use pollinations.ai for high-quality, unique images
-  return `https://image.pollinations.ai/prompt/beautiful%20landscape%20view%20of%20${encodeURIComponent(countryName)}%20travel%20destination?width=1200&height=600&nologo=true`;
+  const countryName = trip.country?.name;
+  return getDynamicImageUrl(countryName);
 };
 
 // ============================================

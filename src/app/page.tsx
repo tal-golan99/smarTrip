@@ -25,13 +25,20 @@ export default function Home() {
         const user = await getCurrentUser();
         if (user) {
           const metadata = user.user_metadata || {};
-          const fullName = metadata.full_name || 
-                          metadata.name ||
-                          (metadata.first_name && metadata.last_name 
-                            ? `${metadata.first_name} ${metadata.last_name}` 
-                            : metadata.first_name || metadata.last_name) ||
-                          user.email?.split('@')[0] || 
-                          null;
+          let fullName = null;
+          if (metadata.full_name) {
+            fullName = metadata.full_name;
+          } else if (metadata.name) {
+            fullName = metadata.name;
+          } else if (metadata.first_name && metadata.last_name) {
+            fullName = `${metadata.first_name} ${metadata.last_name}`;
+          } else if (metadata.first_name) {
+            fullName = metadata.first_name;
+          } else if (metadata.last_name) {
+            fullName = metadata.last_name;
+          } else if (user.email) {
+            fullName = user.email.split('@')[0];
+          }
           setUserName(fullName);
         } else {
           setUserName(null);

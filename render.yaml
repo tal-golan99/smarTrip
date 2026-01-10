@@ -16,4 +16,6 @@ services:
         sync: false  # Set in Render dashboard (your Vercel URL, e.g., https://your-app.vercel.app)
       - key: SUPABASE_JWT_SECRET
         sync: false  # Set in Render dashboard (from Supabase Settings → API → JWT Settings)
+      - key: PIXABAY_API_KEY
+        sync: false  # Set in Render dashboard (from https://pixabay.com/api/docs/ - free tier: 5,000 requests/hour)
 
