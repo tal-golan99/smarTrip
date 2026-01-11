@@ -109,6 +109,72 @@ const getDynamicImage = (trip: Trip): string => {
   return getDynamicImageUrl(countryName);
 };
 
+// Reactive image component that updates when image loads
+function ReactiveBackgroundImage({ 
+  countryName, 
+  imageUrl, 
+  className 
+}: { 
+  countryName?: string; 
+  imageUrl?: string;
+  className?: string;
+}) {
+  const [url, setUrl] = React.useState<string>(() => {
+    // If explicit imageUrl provided, use it
+    if (imageUrl) return imageUrl;
+    // Otherwise check cache or return placeholder
+    return getDynamicImageUrl(countryName);
+  });
+  
+  React.useEffect(() => {
+    // If explicit imageUrl provided, use it and don't listen for updates
+    if (imageUrl) {
+      setUrl(imageUrl);
+      return;
+    }
+    
+    if (!countryName) return;
+    
+    const country = countryName.toLowerCase();
+    
+    // Set initial URL (might be placeholder if not cached)
+    setUrl(getDynamicImageUrl(countryName));
+    
+    // Listen for image load events
+    const handleImageLoaded = (event: Event) => {
+      const customEvent = event as CustomEvent<{ country: string; url: string }>;
+      if (customEvent.detail.country.toLowerCase() === country) {
+        setUrl(customEvent.detail.url);
+      }
+    };
+    
+    window.addEventListener('countryImageLoaded', handleImageLoaded);
+    
+    // Also periodically check cache (fallback in case event is missed)
+    const checkInterval = setInterval(() => {
+      const cachedUrl = getDynamicImageUrl(countryName);
+      // Only update if we got a real URL (not placeholder)
+      if (cachedUrl && !cachedUrl.includes('placehold.co') && cachedUrl !== url) {
+        setUrl(cachedUrl);
+      }
+    }, 1000); // Check every second
+    
+    return () => {
+      window.removeEventListener('countryImageLoaded', handleImageLoaded);
+      clearInterval(checkInterval);
+    };
+  }, [countryName, imageUrl, url]);
+  
+  return (
+    <div
+      className={className}
+      style={{
+        backgroundImage: `url(${url})`,
+      }}
+    />
+  );
+}
+
 // ============================================
 // TRIP RESULT CARD (Phase 1: With Impression Tracking)
 // ============================================
@@ -548,11 +614,10 @@ function SearchResultsPageContent() {
                     className="group block relative h-80 rounded-xl overflow-hidden shadow-lg hover:shadow-2xl transition-all duration-500 cursor-pointer"
                   >
                     {/* Background Image */}
-                    <div
+                    <ReactiveBackgroundImage
+                      countryName={trip.country?.name}
+                      imageUrl={imageUrl}
                       className="absolute inset-0 bg-cover bg-center transition-all duration-1000 ease-in-out group-hover:scale-105"
-                      style={{
-                        backgroundImage: `url(${imageUrl || getDynamicImage(trip)})`,
-                      }}
                     />
                     
                     {/* Overlay */}

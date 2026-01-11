@@ -253,9 +253,10 @@ export default function TripPage() {
       {/* Hero Section */}
       <div className="relative h-[50vh] md:h-[60vh]">
         {/* Background Image */}
-        <div
+        <ReactiveHeroImage
+          countryName={trip.country?.name}
+          imageUrl={imageUrl}
           className="absolute inset-0 bg-cover bg-center"
-          style={{ backgroundImage: `url(${imageUrl})` }}
         />
         
         {/* Gradient Overlay */}
