@@ -24,90 +24,6 @@ const getTripField = (trip: Trip, snakeCase: string, camelCase: string): any => 
   return (trip as any)[snakeCase] || (trip as any)[camelCase];
 };
 
-// Generate dynamic background image based on country
-import { getDynamicImageUrl, prefetchCountryImage } from '@/lib/imageUtils';
-
-const getDynamicImage = (trip: Trip): string => {
-  const countryName = trip.country?.name;
-  return getDynamicImageUrl(countryName);
-};
-
-// Hero image component - uses redirect URL that works in production
-function ReactiveHeroImage({ 
-  countryName, 
-  imageUrl, 
-  className 
-}: { 
-  countryName?: string; 
-  imageUrl?: string;
-  className?: string;
-}) {
-  const [url, setUrl] = useState<string>(() => {
-    // If explicit imageUrl provided, use it
-    if (imageUrl) return imageUrl;
-    // Use getDynamicImageUrl which returns redirect URL or cached Pixabay URL
-    return getDynamicImageUrl(countryName);
-  });
-  
-  useEffect(() => {
-    // If explicit imageUrl provided, use it
-    if (imageUrl) {
-      setUrl(imageUrl);
-      return;
-    }
-    
-    if (!countryName) return;
-    
-    // Set initial URL (redirect URL or cached Pixabay URL)
-    const initialUrl = getDynamicImageUrl(countryName);
-    setUrl(initialUrl);
-    
-    // Listen for image load events to update when cache is populated
-    const handleImageLoaded = (event: Event) => {
-      const customEvent = event as CustomEvent<{ country: string; url: string }>;
-      const eventCountry = customEvent.detail.country?.toLowerCase();
-      if (eventCountry === countryName.toLowerCase() && customEvent.detail.url && !customEvent.detail.url.includes('placehold.co')) {
-        console.log(`[ReactiveHeroImage] Event matched, updating to Pixabay URL for ${countryName}`);
-        setUrl(customEvent.detail.url);
-      }
-    };
-    
-    window.addEventListener('countryImageLoaded', handleImageLoaded);
-    
-    // Check cache periodically - when real Pixabay URL is cached, use it instead of redirect/placeholder
-    const checkCache = () => {
-      const cachedUrl = getDynamicImageUrl(countryName);
-      // Only update if we got a real Pixabay URL (not redirect URL, not placeholder)
-      if (cachedUrl && !cachedUrl.includes('placehold.co') && !cachedUrl.includes('/api/images/country/')) {
-        setUrl((currentUrl) => {
-          // Update if we're using redirect URL (production) or placeholder (localhost)
-          if (currentUrl !== cachedUrl && (currentUrl.includes('/api/images/country/') || currentUrl.includes('placehold.co'))) {
-            console.log(`[ReactiveHeroImage] Cache check found Pixabay URL for ${countryName}`);
-            return cachedUrl;
-          }
-          return currentUrl;
-        });
-      }
-    };
-    
-    // Check cache periodically
-    // - Production: Redirect URL works immediately, this optimizes to direct URL when available
-    // - Localhost: Placeholder shows initially, this updates to real URL when available
-    const checkInterval = setInterval(checkCache, 1000);
-    
-    return () => {
-      window.removeEventListener('countryImageLoaded', handleImageLoaded);
-      clearInterval(checkInterval);
-    };
-  }, [countryName, imageUrl]);
-  
-  return (
-    <div
-      className={className}
-      style={{ backgroundImage: `url(${url})` }}
-    />
-  );
-}
 
 // Format date to DD.MM.YYYY
 const formatDate = (dateString?: string): string => {
@@ -250,12 +166,6 @@ export default function TripPage() {
           setTrip(data.data);
           
           // Prefetch country image for better performance
-          const countryName = data.data.country?.name;
-          if (countryName) {
-            prefetchCountryImage(countryName).catch(() => {
-              // Silently fail - placeholder will be used
-            });
-          }
         } else {
           throw new Error('שגיאה בטעינת פרטי הטיול');
         }
@@ -314,7 +224,6 @@ export default function TripPage() {
   // Get trip fields
   const title = getTripField(trip, 'title_he', 'titleHe') || getTripField(trip, 'title', 'title') || 'טיול מומלץ';
   const description = getTripField(trip, 'description_he', 'descriptionHe') || getTripField(trip, 'description', 'description') || '';
-  const imageUrl = getTripField(trip, 'image_url', 'imageUrl') || getDynamicImage(trip);
   const startDate = getTripField(trip, 'start_date', 'startDate');
   const endDate = getTripField(trip, 'end_date', 'endDate');
   const duration = calculateDuration(startDate, endDate);
@@ -328,14 +237,7 @@ export default function TripPage() {
   return (
     <div className="min-h-screen bg-white flex flex-col">
       {/* Hero Section */}
-      <div className="relative h-[50vh] md:h-[60vh]">
-        {/* Background Image */}
-        <ReactiveHeroImage
-          countryName={trip.country?.name}
-          imageUrl={imageUrl}
-          className="absolute inset-0 bg-cover bg-center"
-        />
-        
+      <div className="relative h-[50vh] md:h-[60vh] bg-gray-400">
         {/* Gradient Overlay */}
         <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-black/20" />
         

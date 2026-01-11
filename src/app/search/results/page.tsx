@@ -101,92 +101,6 @@ const getStatusIcon = (status?: string) => {
   }
 };
 
-// Generate dynamic background image based on country
-import { getDynamicImageUrl, prefetchCountryImage } from '@/lib/imageUtils';
-
-const getDynamicImage = (trip: Trip): string => {
-  const countryName = trip.country?.name;
-  return getDynamicImageUrl(countryName);
-};
-
-// Background image component - uses redirect URL that works in production
-function ReactiveBackgroundImage({ 
-  countryName, 
-  imageUrl, 
-  className 
-}: { 
-  countryName?: string; 
-  imageUrl?: string;
-  className?: string;
-}) {
-  const [url, setUrl] = React.useState<string>(() => {
-    // If explicit imageUrl provided, use it
-    if (imageUrl) return imageUrl;
-    // Use getDynamicImageUrl which returns redirect URL or cached Pixabay URL
-    return getDynamicImageUrl(countryName);
-  });
-  
-  React.useEffect(() => {
-    // If explicit imageUrl provided, use it
-    if (imageUrl) {
-      setUrl(imageUrl);
-      return;
-    }
-    
-    if (!countryName) return;
-    
-    // Set initial URL (redirect URL or cached Pixabay URL)
-    const initialUrl = getDynamicImageUrl(countryName);
-    setUrl(initialUrl);
-    
-    // Listen for image load events to update when cache is populated
-    const handleImageLoaded = (event: Event) => {
-      const customEvent = event as CustomEvent<{ country: string; url: string }>;
-      const eventCountry = customEvent.detail.country?.toLowerCase();
-      if (eventCountry === countryName.toLowerCase() && customEvent.detail.url && !customEvent.detail.url.includes('placehold.co')) {
-        console.log(`[ReactiveBackgroundImage] Event matched, updating to Pixabay URL for ${countryName}`);
-        setUrl(customEvent.detail.url);
-      }
-    };
-    
-    window.addEventListener('countryImageLoaded', handleImageLoaded);
-    
-    // Check cache periodically - when real Pixabay URL is cached, use it instead of redirect/placeholder
-    const checkCache = () => {
-      const cachedUrl = getDynamicImageUrl(countryName);
-      // Only update if we got a real Pixabay URL (not redirect URL, not placeholder)
-      if (cachedUrl && !cachedUrl.includes('placehold.co') && !cachedUrl.includes('/api/images/country/')) {
-        setUrl((currentUrl) => {
-          // Update if we're using redirect URL (production) or placeholder (localhost)
-          if (currentUrl !== cachedUrl && (currentUrl.includes('/api/images/country/') || currentUrl.includes('placehold.co'))) {
-            console.log(`[ReactiveBackgroundImage] Cache check found Pixabay URL for ${countryName}`);
-            return cachedUrl;
-          }
-          return currentUrl;
-        });
-      }
-    };
-    
-    // Check cache periodically
-    // - Production: Redirect URL works immediately, this optimizes to direct URL when available
-    // - Localhost: Placeholder shows initially, this updates to real URL when available
-    const checkInterval = setInterval(checkCache, 1000);
-    
-    return () => {
-      window.removeEventListener('countryImageLoaded', handleImageLoaded);
-      clearInterval(checkInterval);
-    };
-  }, [countryName, imageUrl]);
-  
-  return (
-    <div
-      className={className}
-      style={{
-        backgroundImage: `url(${url})`,
-      }}
-    />
-  );
-}
 
 // ============================================
 // TRIP RESULT CARD (Phase 1: With Impression Tracking)
@@ -425,21 +339,6 @@ function SearchResultsPageContent() {
         }
         setShowRefinementMessage(data.show_refinement_message || false);
         
-        // Prefetch all country images for better performance
-        // This ensures images are cached before display
-        const trips = data.data || [];
-        const uniqueCountries = new Set<string>();
-        trips.forEach((result: any) => {
-          const trip = result.trip || result;
-          const countryName = trip.country?.name;
-          if (countryName && !uniqueCountries.has(countryName)) {
-            uniqueCountries.add(countryName);
-            // Prefetch in background (fire and forget)
-            prefetchCountryImage(countryName).catch(() => {
-              // Silently fail - placeholder will be used
-            });
-          }
-        });
       } catch (fetchErr: any) {
         clearTimeout(timeoutId);
         if (fetchErr.name === 'AbortError') {
@@ -626,12 +525,8 @@ function SearchResultsPageContent() {
                     onClick={() => tripId && handleTripClick(tripId, index, matchScore, clickSource)}
                     className="group block relative h-80 rounded-xl overflow-hidden shadow-lg hover:shadow-2xl transition-all duration-500 cursor-pointer"
                   >
-                    {/* Background Image */}
-                    <ReactiveBackgroundImage
-                      countryName={trip.country?.name}
-                      imageUrl={imageUrl}
-                      className="absolute inset-0 bg-cover bg-center transition-all duration-1000 ease-in-out group-hover:scale-105"
-                    />
+                    {/* Background */}
+                    <div className="absolute inset-0 bg-gray-400" />
                     
                     {/* Overlay */}
                     <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/40 to-black/20 group-hover:from-black/80 group-hover:via-black/60 group-hover:to-black/40 transition-all duration-1000 ease-in-out" />

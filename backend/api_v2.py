@@ -831,6 +831,7 @@ def get_recommendations_v2():
                 )
             
             # RELAXED GEOGRAPHY: Expand to same continent if user selected specific countries
+            # Also include the original selected countries (even if no trip type match)
             if selected_countries or selected_continents_enum:
                 geo_filters = []
                 
@@ -840,16 +841,22 @@ def get_recommendations_v2():
                     expanded_continents = set()
                     for c in selected_country_objs:
                         if c.continent:
-                            continent_name = c.continent.name if hasattr(c.continent, 'name') else str(c.continent)
-                            expanded_continents.add(continent_name)
+                            # Continent is an Enum, get its name (e.g., 'EUROPE')
+                            continent_enum_name = c.continent.name if hasattr(c.continent, 'name') else str(c.continent)
+                            expanded_continents.add(continent_enum_name)
                     
-                    # Include all countries from same continents
+                    # Join Country table for continent filtering
                     relaxed_query = relaxed_query.join(Country, TripTemplate.primary_country_id == Country.id)
+                    
+                    # Include BOTH: original selected countries AND all countries from same continents
+                    country_filter = TripTemplate.primary_country_id.in_(selected_countries)
                     if expanded_continents:
-                        geo_filters.append(Country.continent.in_(list(expanded_continents)))
-                        print(f"[V2 RELAXED] Expanded geography to continents: {expanded_continents}", flush=True)
+                        continent_filter = Country.continent.in_(list(expanded_continents))
+                        # Use OR to include both selected countries and continent expansion
+                        geo_filters.append(or_(country_filter, continent_filter))
+                        print(f"[V2 RELAXED] Expanded geography: selected countries {selected_countries} OR continents {expanded_continents}", flush=True)
                     else:
-                        geo_filters.append(TripTemplate.primary_country_id.in_(selected_countries))
+                        geo_filters.append(country_filter)
                 
                 if selected_continents_enum:
                     if not selected_countries:  # Only join if not already joined
