@@ -16,45 +16,10 @@ import {
   ClickSource,
 } from '@/lib/useTracking';
 import { trackEvent } from '@/lib/tracking';
+import type { Trip, Country, Guide } from '@/lib/api';
 
 // API URL from environment variable (set in Vercel)
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
-
-interface Country {
-  id: number;
-  name: string;
-  name_he: string;
-  continent: string;
-}
-
-interface Trip {
-  id: number;
-  title?: string;
-  title_he?: string;
-  titleHe?: string;
-  description?: string;
-  description_he?: string;
-  descriptionHe?: string;
-  image_url?: string;
-  imageUrl?: string;
-  start_date?: string;
-  startDate?: string;
-  end_date?: string;
-  endDate?: string;
-  price: number;
-  spots_left?: number;
-  spotsLeft?: number;
-  status?: string;
-  country?: Country;
-  country_id?: number;
-  countryId?: number;
-}
-
-interface Guide {
-  id: number;
-  name: string;
-  name_he?: string;
-}
 
 interface SearchResult {
   trip: Trip;
@@ -137,7 +102,7 @@ const getStatusIcon = (status?: string) => {
 };
 
 // Generate dynamic background image based on country
-import { getDynamicImageUrl } from '@/lib/imageUtils';
+import { getDynamicImageUrl, prefetchCountryImage } from '@/lib/imageUtils';
 
 const getDynamicImage = (trip: Trip): string => {
   const countryName = trip.country?.name;
@@ -327,7 +292,6 @@ function SearchResultsPageContent() {
       };
 
       // Log the API URL being used (for debugging)
-      // V2 API: Uses templates + occurrences schema
       console.log('Fetching recommendations from:', `${API_URL}/api/v2/recommendations`);
       console.log('Request preferences:', preferences);
 
@@ -381,6 +345,22 @@ function SearchResultsPageContent() {
           setScoreThresholds(data.score_thresholds);
         }
         setShowRefinementMessage(data.show_refinement_message || false);
+        
+        // Prefetch all country images for better performance
+        // This ensures images are cached before display
+        const trips = data.data || [];
+        const uniqueCountries = new Set<string>();
+        trips.forEach((result: any) => {
+          const trip = result.trip || result;
+          const countryName = trip.country?.name;
+          if (countryName && !uniqueCountries.has(countryName)) {
+            uniqueCountries.add(countryName);
+            // Prefetch in background (fire and forget)
+            prefetchCountryImage(countryName).catch(() => {
+              // Silently fail - placeholder will be used
+            });
+          }
+        });
       } catch (fetchErr: any) {
         clearTimeout(timeoutId);
         if (fetchErr.name === 'AbortError') {
@@ -519,7 +499,6 @@ function SearchResultsPageContent() {
             <div className="space-y-6 mb-8">
               {results.map((result, index) => {
                 const trip = result.trip || result;
-                const dynamicImage = getDynamicImage(trip);
                 const tripId = trip?.id;
                 const isRelaxed = (result as any).is_relaxed || false;
                 const isFirstRelaxed = isRelaxed && (index === 0 || !(results[index - 1] as any).is_relaxed);
@@ -550,7 +529,7 @@ function SearchResultsPageContent() {
                 const endDate = getTripField(trip, 'end_date', 'endDate');
                 const spotsLeft = getTripField(trip, 'spots_left', 'spotsLeft');
                 const tripType = getTripField(trip, 'trip_type', 'tripType') || getTripField(trip, 'type', 'type');
-                const tripTypeNameHe = tripType?.name_he || tripType?.nameHe || '';
+                const tripTypeNameHe = tripType?.nameHe || '';
                 const tripTypeId = getTripField(trip, 'trip_type_id', 'tripTypeId');
                 const isPrivateGroup = tripTypeId === 10;
                 
@@ -572,7 +551,7 @@ function SearchResultsPageContent() {
                     <div
                       className="absolute inset-0 bg-cover bg-center transition-all duration-1000 ease-in-out group-hover:scale-105"
                       style={{
-                        backgroundImage: `url(${imageUrl || dynamicImage})`,
+                        backgroundImage: `url(${imageUrl || getDynamicImage(trip)})`,
                       }}
                     />
                     
@@ -647,9 +626,9 @@ function SearchResultsPageContent() {
                       </p>
                       
                       {/* Guide Name (Hebrew ONLY - Enhanced Styling) */}
-                      {result?.guide?.name_he && (
+                      {result?.guide?.name && (
                         <p className="text-gray-200 text-xs md:text-sm mb-2 md:mb-3 drop-shadow-lg font-medium">
-                          בהדרכה של: <span className="text-white font-bold">{result.guide.name_he}</span>
+                          בהדרכה של: <span className="text-white font-bold">{result.guide.name}</span>
                         </p>
                       )}
                       

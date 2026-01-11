@@ -141,8 +141,6 @@ function AuthPageContent() {
       // Get the correct origin (production or localhost)
       // In production, window.location.origin will be the Vercel URL
       // In development, it will be http://localhost:3000
-      // IMPORTANT: Make sure your production URL is added to Supabase Dashboard:
-      // Settings → Authentication → URL Configuration → Redirect URLs
       const origin = typeof window !== 'undefined' ? window.location.origin : '';
       
       // Build the callback URL - must match one of the URLs configured in Supabase Dashboard

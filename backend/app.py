@@ -530,22 +530,6 @@ def get_tags():
 
 
 # ============================================
-# V1 ENDPOINTS REMOVED (V2 Migration Complete)
-# ============================================
-# The following V1 endpoints have been removed:
-# - /api/trips (use /api/v2/trips)
-# - /api/trips/<id> (use /api/v2/trips/<id>)
-# - /api/recommendations (use /api/v2/recommendations)
-#
-# Frontend uses V2 endpoints exclusively via api_v2.py blueprint.
-# V1 endpoints were deprecated and removed because:
-# 1. Frontend doesn't use them (100% on V2)
-# 2. They referenced V1 models (Trip, TripTag) that aren't imported
-# 3. They would crash with NameError if called
-#
-# All functionality is available in /api/v2/* endpoints.
-#
-# ============================================
 # PIXABAY IMAGE API ENDPOINT
 # ============================================
 
@@ -557,19 +541,20 @@ def _get_pixabay_image_url(country_name: str, width: int = 1200, height: int = 6
     """
     Fetch landscape image URL from Pixabay API for a country.
     
+    Each country gets a different image by using country-specific search query.
+    Same country always gets the same image (deterministic, cache-friendly).
+    
     Returns placeholder URL if API fails or key is missing.
     """
     pixabay_key = os.getenv('PIXABAY_API_KEY')
     
-    # Fallback if no API key
     if not pixabay_key:
-        print(f"[PIXABAY] No API key configured, using placeholder for {country_name}", flush=True)
-        encoded_country = requests.utils.quote(country_name)
-        # Use placehold.co as it's more reliable than via.placeholder.com
-        return f"https://placehold.co/{width}x{height}/4A90E2/FFFFFF?text={encoded_country}"
+        print(f"[PIXABAY] No API key, using placeholder for {country_name}", flush=True)
+        return f"https://placehold.co/{width}x{height}/4A90E2/FFFFFF?text={requests.utils.quote(country_name)}"
     
-    # Build Pixabay API query
-    query = f"{country_name} landscape travel"
+    # Country-specific query: country name + landscape
+    # Different countries = different queries = different images automatically
+    query = f"{country_name} landscape"
     pixabay_url = "https://pixabay.com/api/"
     
     params = {
@@ -580,7 +565,8 @@ def _get_pixabay_image_url(country_name: str, width: int = 1200, height: int = 6
         'safesearch': 'true',
         'orientation': 'horizontal',
         'min_width': width,
-        'per_page': 3  # Get a few results, we'll use the first one
+        'per_page': 1,  # Only need first result
+        'order': 'popular'
     }
     
     try:
@@ -588,30 +574,37 @@ def _get_pixabay_image_url(country_name: str, width: int = 1200, height: int = 6
         response.raise_for_status()
         data = response.json()
         
-        # Check if we got results
-        if data.get('totalHits', 0) > 0:
-            hits = data.get('hits', [])
-            if hits and len(hits) > 0:
-                # Use first result (deterministic - always same country = same image)
-                image_url = hits[0].get('webformatURL') or hits[0].get('largeImageURL')
-                if image_url:
-                    print(f"[PIXABAY] Found image for {country_name}: {image_url[:50]}...", flush=True)
-                    return image_url
+        hits = data.get('hits', [])
+        if hits:
+            # Use first result (best/most popular match for this country)
+            selected = hits[0]
+            image_url = selected.get('webformatURL') or selected.get('largeImageURL')
+            if image_url:
+                print(f"[PIXABAY] '{country_name}': found image (ID: {selected.get('id')})", flush=True)
+                return image_url
         
-        # No results found - use placeholder
-        print(f"[PIXABAY] No results found for {country_name}, using placeholder", flush=True)
-        encoded_country = requests.utils.quote(country_name)
-        return f"https://placehold.co/{width}x{height}/4A90E2/FFFFFF?text={encoded_country}"
+        # No results - try fallback query
+        fallback_query = f"{country_name} nature"
+        params['q'] = fallback_query
+        response = requests.get(pixabay_url, params=params, timeout=5)
+        response.raise_for_status()
+        data = response.json()
+        
+        hits = data.get('hits', [])
+        if hits:
+            selected = hits[0]
+            image_url = selected.get('webformatURL') or selected.get('largeImageURL')
+            if image_url:
+                print(f"[PIXABAY] '{country_name}': found image with fallback query '{fallback_query}' (ID: {selected.get('id')})", flush=True)
+                return image_url
+        
+        # All queries failed - use placeholder
+        print(f"[PIXABAY] No images found for '{country_name}'", flush=True)
+        return f"https://placehold.co/{width}x{height}/4A90E2/FFFFFF?text={requests.utils.quote(country_name)}"
     
-    except requests.exceptions.RequestException as e:
-        print(f"[PIXABAY] Error fetching image for {country_name}: {e}", flush=True)
-        # Fallback to placeholder
-        encoded_country = requests.utils.quote(country_name)
-        return f"https://placehold.co/{width}x{height}/4A90E2/FFFFFF?text={encoded_country}"
     except Exception as e:
-        print(f"[PIXABAY] Unexpected error for {country_name}: {e}", flush=True)
-        encoded_country = requests.utils.quote(country_name)
-        return f"https://placehold.co/{width}x{height}/4A90E2/FFFFFF?text={encoded_country}"
+        print(f"[PIXABAY] Error fetching image for '{country_name}': {e}", flush=True)
+        return f"https://placehold.co/{width}x{height}/4A90E2/FFFFFF?text={requests.utils.quote(country_name)}"
 
 
 @app.route('/api/images/country/<country_name>', methods=['GET'])

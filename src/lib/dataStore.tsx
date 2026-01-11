@@ -1,10 +1,6 @@
 /**
  * Centralized Data Store (Phase 1)
- * =================================
- * 
  * Single source of truth for reference data from the backend.
- * Eliminates the need for hardcoded fallback IDs in components.
- * 
  * Features:
  * - Caches data from backend API
  * - Provides React hooks for data access
@@ -18,29 +14,23 @@ import React, { useState, useEffect, useCallback, createContext, useContext, Rea
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
 
+import type { BaseCountry, BaseTripType, BaseTag } from '@/lib/api';
+
 // ============================================
 // TYPE DEFINITIONS
 // ============================================
 
-export interface Country {
-  id: number;
-  name: string;
-  nameHe: string;
+// Store interfaces extend bases
+export interface Country extends BaseCountry {
   continent: string;
 }
 
-export interface TripType {
-  id: number;
-  name: string;
-  nameHe: string;
+export interface TripType extends BaseTripType {
   description?: string;
 }
 
-export interface ThemeTag {
-  id: number;
-  name: string;
-  nameHe: string;
-  category: string;
+export interface ThemeTag extends BaseTag {
+  // category already in BaseTag
 }
 
 interface DataStoreState {
@@ -410,22 +400,22 @@ export function useThemeTags() {
 // These map by NAME, not by ID, so they work regardless of database IDs
 import { 
   Compass, Ship, Camera, Mountain, Palmtree,
-  Plane, Train, Users, Snowflake, Car,
+  Plane, Train, Users, Users2, Snowflake, Car,
   TrendingUp, PawPrint, Landmark, Utensils,
-  Waves, Sun, TreePine, Globe
+  Waves, Sun, TreePine, Globe, Sparkles, Binoculars
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
 export const TRIP_TYPE_ICONS: Record<string, LucideIcon> = {
   'Geographic Depth': Compass,
-  'Carnivals & Festivals': TreePine,
-  'African Safari': PawPrint,
+  'Carnivals & Festivals': Sparkles,
+  'African Safari': Binoculars,
   'Train Tours': Train,
   'Geographic Cruises': Ship,
   'Nature Hiking': Mountain,
   'Jeep Tours': Car,
   'Snowmobile Tours': Snowflake,
-  'Private Groups': Users,
+  'Private Groups': Users2,
   'Photography': Camera,
 };
 
@@ -471,3 +461,155 @@ export const CONTINENTS = [
 ] as const;
 
 export type ContinentValue = typeof CONTINENTS[number]['value'];
+
+// ============================================
+// UI CONSTANTS (Country Flags & Continent Images)
+// ============================================
+
+export const COUNTRY_FLAGS: Record<string, string> = {
+  // AFRICA
+  'Uganda': 'ug',
+  'Ethiopia': 'et',
+  'Botswana': 'bw',
+  'South Africa': 'za',
+  'Tunisia': 'tn',
+  'Tanzania': 'tz',
+  'Madagascar': 'mg',
+  'Egypt': 'eg',
+  'Morocco': 'ma',
+  'Namibia': 'na',
+  'Kenya': 'ke',
+  'Rwanda': 'rw',
+  'Zimbabwe': 'zw',
+  'Zambia': 'zm',
+  'Senegal': 'sn',
+  'Ghana': 'gh',
+  
+  // ASIA
+  'Uzbekistan': 'uz',
+  'Azerbaijan': 'az',
+  'United Arab Emirates': 'ae',
+  'Indonesia': 'id',
+  'Bhutan': 'bt',
+  'Myanmar': 'mm',
+  'India': 'in',
+  'Hong Kong': 'hk',
+  'Vietnam': 'vn',
+  'Taiwan': 'tw',
+  'Tajikistan': 'tj',
+  'Turkey': 'tr',
+  'Tibet': 'cn',
+  'Japan': 'jp',
+  'Jordan': 'jo',
+  'Israel': 'il',
+  'Laos': 'la',
+  'Mongolia': 'mn',
+  'Nepal': 'np',
+  'China': 'cn',
+  'Singapore': 'sg',
+  'Sri Lanka': 'lk',
+  'Oman': 'om',
+  'Philippines': 'ph',
+  'North Korea': 'kp',
+  'South Korea': 'kr',
+  'Kyrgyzstan': 'kg',
+  'Cambodia': 'kh',
+  'Thailand': 'th',
+  'Malaysia': 'my',
+  
+  // EUROPE
+  'Austria': 'at',
+  'Ukraine': 'ua',
+  'Italy': 'it',
+  'Azores': 'pt',
+  'Canary Islands': 'es',
+  'Iceland': 'is',
+  'Ireland': 'ie',
+  'Albania': 'al',
+  'England': 'gb',
+  'Estonia': 'ee',
+  'Armenia': 'am',
+  'Scotland': 'gb',
+  'Wales': 'gb',
+  'Bulgaria': 'bg',
+  'Bosnia and Herzegovina': 'ba',
+  'Belgium': 'be',
+  'Georgia': 'ge',
+  'Greenland': 'gl',
+  'Germany': 'de',
+  'Dagestan': 'ru',
+  'Netherlands': 'nl',
+  'Holland': 'nl',
+  'Hungary': 'hu',
+  'Greece': 'gr',
+  'Crete': 'gr',
+  'Latvia': 'lv',
+  'Lithuania': 'lt',
+  'Lapland': 'fi',
+  'Madeira': 'pt',
+  'Mont Blanc': 'fr',
+  'Montenegro': 'me',
+  'Malta': 'mt',
+  'Macedonia': 'mk',
+  'Norway': 'no',
+  'Sicily': 'it',
+  'Slovenia': 'si',
+  'Slovakia': 'sk',
+  'Spain': 'es',
+  'Scandinavia': 'se',
+  'Serbia': 'rs',
+  'Sardinia': 'it',
+  'Poland': 'pl',
+  'Portugal': 'pt',
+  'Czech Republic': 'cz',
+  'France': 'fr',
+  'Corsica': 'fr',
+  'Croatia': 'hr',
+  'Romania': 'ro',
+  'Russia': 'ru',
+  'Switzerland': 'ch',
+  'Denmark': 'dk',
+  
+  // NORTH & CENTRAL AMERICA
+  'United States': 'us',
+  'Guatemala': 'gt',
+  'Hawaii': 'us',
+  'Mexico': 'mx',
+  'Panama': 'pa',
+  'Cuba': 'cu',
+  'Costa Rica': 'cr',
+  'Canada': 'ca',
+  
+  // SOUTH AMERICA
+  'Ecuador': 'ec',
+  'Argentina': 'ar',
+  'Bolivia': 'bo',
+  'Brazil': 'br',
+  'Peru': 'pe',
+  'Chile': 'cl',
+  'Colombia': 'co',
+  
+  // OCEANIA
+  'Australia': 'au',
+  'New Zealand': 'nz',
+  'Fiji': 'fj',
+  'Papua New Guinea': 'pg',
+  'Tahiti': 'pf',
+  'Samoa': 'ws',
+  'Vanuatu': 'vu',
+  'New Caledonia': 'nc',
+  'Cook Islands': 'ck',
+  
+  // ANTARCTICA
+  'Antarctica': 'aq',
+};
+
+export const CONTINENT_IMAGES: Record<string, string> = {
+  'Europe': '/images/continents/europe.png',
+  'Africa': '/images/continents/africa.png',
+  'Antarctica': '/images/continents/antartica.png',
+  'Oceania': '/images/continents/ocenia.png',
+  'North & Central America': '/images/continents/north_america.png',
+  'Asia': '/images/continents/asia.png',
+  'South America': '/images/continents/south_america.png',
+};

@@ -1,7 +1,5 @@
 /**
  * API Client for SmartTrip Flask Backend
- * V2 Schema: Uses TripTemplates + TripOccurrences
- * 
  * Handles all HTTP requests to the Python backend
  */
 
@@ -174,10 +172,28 @@ async function apiFetch<T>(
 // TYPE DEFINITIONS
 // ============================================
 
-export interface Country {
+// Base interfaces - core fields only
+export interface BaseCountry {
   id: number;
   name: string;
   nameHe: string;
+}
+
+export interface BaseTripType {
+  id: number;
+  name: string;
+  nameHe: string;
+}
+
+export interface BaseTag {
+  id: number;
+  name: string;
+  nameHe: string;
+  category: string;
+}
+
+// API response interfaces (extend bases, add backend fields)
+export interface Country extends BaseCountry {
   continent: string;
   createdAt: string;
   updatedAt: string;
@@ -198,26 +214,18 @@ export interface Guide {
   updatedAt: string;
 }
 
-export interface Tag {
-  id: number;
-  name: string;
-  nameHe: string;
-  category: string;
+export interface Tag extends BaseTag {
   description?: string;
   createdAt: string;
   updatedAt: string;
 }
 
-export interface TripType {
-  id: number;
-  name: string;
-  nameHe: string;
+export interface TripType extends BaseTripType {
   description?: string;
   createdAt: string;
   updatedAt: string;
 }
 
-// V2: Company (NEW)
 export interface Company {
   id: number;
   name: string;
@@ -233,7 +241,6 @@ export interface Company {
   updatedAt: string;
 }
 
-// V2: Trip Template (trip definition)
 export interface TripTemplate {
   id: number;
   title: string;
@@ -264,7 +271,6 @@ export interface TripTemplate {
   occurrences?: TripOccurrence[];
 }
 
-// V2: Trip Occurrence (scheduled instance)
 export interface TripOccurrence {
   id: number;
   tripTemplateId: number;
@@ -295,7 +301,7 @@ export interface TripOccurrence {
 // Backward Compatible Trip Interface (maps occurrence to old format)
 export interface Trip {
   id: number;
-  templateId?: number;  // NEW: Link to template
+  templateId?: number;  
   title: string;
   titleHe: string;
   title_he?: string;  // snake_case alias
@@ -324,8 +330,8 @@ export interface Trip {
   guide_id?: number;  // snake_case alias
   tripTypeId?: number;
   trip_type_id?: number;  // snake_case alias
-  companyId?: number;  // NEW
-  company_id?: number;  // NEW snake_case alias
+  companyId?: number; 
+  company_id?: number;  // snake_case alias
   createdAt: string;
   updatedAt: string;
   // Optional relations
@@ -333,7 +339,7 @@ export interface Trip {
   guide?: Guide;
   tripType?: TripType;
   trip_type?: TripType;  // snake_case alias
-  company?: Company;  // NEW
+  company?: Company;  
   tags?: Tag[];
 }
 
@@ -479,10 +485,6 @@ export async function getTripTypes(): Promise<ApiResponse<TripType[]>> {
   return apiFetch<TripType[]>('/api/trip-types');
 }
 
-// ============================================
-// V2 API: COMPANIES
-// ============================================
-
 /**
  * Get all companies
  */
@@ -496,10 +498,6 @@ export async function getCompanies(): Promise<ApiResponse<Company[]>> {
 export async function getCompany(id: number): Promise<ApiResponse<Company>> {
   return apiFetch<Company>(`${API_VERSION}/companies/${id}`);
 }
-
-// ============================================
-// V2 API: TRIP TEMPLATES
-// ============================================
 
 /**
  * Get all trip templates with optional filters
@@ -533,10 +531,6 @@ export async function getTemplates(filters?: {
 export async function getTemplate(id: number): Promise<ApiResponse<TripTemplate>> {
   return apiFetch<TripTemplate>(`${API_VERSION}/templates/${id}`);
 }
-
-// ============================================
-// V2 API: TRIP OCCURRENCES
-// ============================================
 
 /**
  * Get all trip occurrences with optional filters
@@ -621,10 +615,6 @@ export async function getRecommendations(
     body: JSON.stringify(preferences),
   });
 }
-
-// ============================================
-// V2 API: SCHEMA INFO
-// ============================================
 
 /**
  * Get V2 schema information and statistics

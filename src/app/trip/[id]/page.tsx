@@ -14,54 +14,10 @@ import {
   trackPhoneContact,
   trackSaveTrip,
 } from '@/lib/useTracking';
+import type { Trip } from '@/lib/api';
 
 // API URL from environment variable
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
-
-interface Country {
-  id: number;
-  name: string;
-  name_he: string;
-  continent: string;
-}
-
-interface Guide {
-  id: number;
-  name: string;
-  name_he?: string;
-}
-
-interface TripType {
-  id: number;
-  name: string;
-  name_he?: string;
-}
-
-interface Company {
-  id: number;
-  name: string;
-  name_he?: string;
-}
-
-interface Trip {
-  id: number;
-  title?: string;
-  title_he?: string;
-  description?: string;
-  description_he?: string;
-  image_url?: string;
-  start_date?: string;
-  end_date?: string;
-  price: number;
-  spots_left?: number;
-  status?: string;
-  difficulty_level?: number;
-  country?: Country;
-  guide?: Guide;
-  trip_type?: TripType;
-  trip_type_id?: number;
-  company?: Company;
-}
 
 // Helper to get trip field with both snake_case and camelCase support
 const getTripField = (trip: Trip, snakeCase: string, camelCase: string): any => {
@@ -69,7 +25,7 @@ const getTripField = (trip: Trip, snakeCase: string, camelCase: string): any => 
 };
 
 // Generate dynamic background image based on country
-import { getDynamicImageUrl } from '@/lib/imageUtils';
+import { getDynamicImageUrl, prefetchCountryImage } from '@/lib/imageUtils';
 
 const getDynamicImage = (trip: Trip): string => {
   const countryName = trip.country?.name;
@@ -166,7 +122,12 @@ export default function TripPage() {
   const router = useRouter();
   const params = useParams();
   const tripId = params.id as string;
-  const tripIdNum = tripId ? parseInt(tripId, 10) : undefined;
+  let tripIdNum;
+  if (tripId) {
+    tripIdNum = parseInt(tripId, 10);
+  } else {
+    tripIdNum = undefined;
+  }
   
   const [trip, setTrip] = useState<Trip | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -210,6 +171,14 @@ export default function TripPage() {
         
         if (data.success && data.data) {
           setTrip(data.data);
+          
+          // Prefetch country image for better performance
+          const countryName = data.data.country?.name;
+          if (countryName) {
+            prefetchCountryImage(countryName).catch(() => {
+              // Silently fail - placeholder will be used
+            });
+          }
         } else {
           throw new Error('שגיאה בטעינת פרטי הטיול');
         }
@@ -272,8 +241,8 @@ export default function TripPage() {
   const startDate = getTripField(trip, 'start_date', 'startDate');
   const endDate = getTripField(trip, 'end_date', 'endDate');
   const duration = calculateDuration(startDate, endDate);
-  const guideName = trip.guide?.name_he || '';
-  const countryName = trip.country?.name_he || trip.country?.name || '';
+  const guideName = trip.guide?.name || '';
+  const countryName = trip.country?.nameHe || trip.country?.name || '';
   const difficultyLevel = getTripField(trip, 'difficulty_level', 'difficultyLevel');
   const spotsLeft = getTripField(trip, 'spots_left', 'spotsLeft');
   const tripType = (trip as any).type || (trip as any).trip_type;
@@ -385,7 +354,7 @@ export default function TripPage() {
               </div>
               <div className="text-right">
                 <p className="text-sm text-gray-500">מאורגן על ידי</p>
-                <p className="text-lg font-bold text-[#076839]">{trip.company.name_he || trip.company.name}</p>
+                <p className="text-lg font-bold text-[#076839]">{trip.company.nameHe || trip.company.name}</p>
               </div>
             </div>
           )}

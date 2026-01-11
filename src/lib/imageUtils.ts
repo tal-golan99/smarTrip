@@ -19,10 +19,14 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
  * Uses Pixabay API via backend endpoint. Backend handles caching and returns
  * the actual image URL. Falls back to placeholder if backend is unavailable.
  * 
+ * IMPORTANT: This function returns a placeholder initially and fetches
+ * the actual URL asynchronously. Components should use getDynamicImageUrlReactive()
+ * or listen to 'countryImageLoaded' event for reactive updates.
+ * 
  * @param countryName - Name of the country (e.g., "Samoa", "New Caledonia")
  * @param width - Image width (default: 1200)
  * @param height - Image height (default: 600)
- * @returns Image URL (backend endpoint that redirects to Pixabay or placeholder)
+ * @returns Placeholder URL initially, then actual URL once fetched (via cache)
  */
 export function getDynamicImageUrl(
   countryName: string | undefined,
@@ -40,17 +44,16 @@ export function getDynamicImageUrl(
     }
   }
   
-  // Return backend endpoint URL with redirect flag
-  // Backend will redirect (302) to actual Pixabay image or placeholder
-  const encodedCountry = encodeURIComponent(country);
-  const backendUrl = `${API_BASE_URL}/api/images/country/${encodedCountry}?width=${width}&height=${height}&redirect=true`;
-  
-  // Start async fetch to populate cache for next time (fire and forget)
+  // Start async fetch to populate cache (fire and forget)
+  // This ensures the actual URL is available on next render
   fetchCountryImage(country, width, height).catch(() => {
-    // Silently fail - backend URL will work regardless
+    // Silently fail - placeholder will be used
   });
   
-  return backendUrl;
+  // Return placeholder immediately (will be replaced once fetch completes)
+  // Components should use getDynamicImageUrlReactive() for reactive updates
+  const encodedCountry = encodeURIComponent(country);
+  return `https://placehold.co/${width}x${height}/4A90E2/FFFFFF?text=${encodedCountry}`;
 }
 
 /**
@@ -82,17 +85,28 @@ async function fetchCountryImage(
       if (data.success && data.url) {
         // Cache the URL
         imageCache.set(cacheKey, data.url);
+        console.log(`[ImageUtils] Successfully loaded image for ${countryName}:`, data.url);
         // Trigger re-render by dispatching custom event (optional - can be used by components)
         if (typeof window !== 'undefined') {
           window.dispatchEvent(new CustomEvent('countryImageLoaded', {
             detail: { country: countryName, url: data.url }
           }));
         }
+      } else {
+        console.warn(`[ImageUtils] Backend returned success=false for ${countryName}:`, data);
       }
+    } else {
+      console.warn(`[ImageUtils] Backend returned status ${response.status} for ${countryName}`);
+      const errorText = await response.text().catch(() => 'Unable to read error');
+      console.warn(`[ImageUtils] Error response:`, errorText);
     }
   } catch (error) {
-    // Silently fail - placeholder is already being used
-    console.debug(`[ImageUtils] Failed to fetch image for ${countryName}:`, error);
+    // Log error for debugging (especially on localhost)
+    console.warn(`[ImageUtils] Failed to fetch image for ${countryName}:`, error);
+    if (error instanceof Error) {
+      console.warn(`[ImageUtils] Error details: ${error.message}`);
+    }
+    console.warn(`[ImageUtils] Backend URL: ${API_BASE_URL}/api/images/country/${encodedCountry}`);
   }
 }
 
@@ -165,4 +179,5 @@ export function getImageUrlFallbacks(
   
   return urls;
 }
+
 

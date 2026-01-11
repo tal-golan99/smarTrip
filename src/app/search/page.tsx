@@ -25,6 +25,17 @@ import { getCurrentUser, supabase, isAuthAvailable } from '@/lib/supabaseClient'
 // API functions with retry logic
 import { getLocations, getTripTypes, getTags } from '@/lib/api';
 
+// Data store imports
+import { 
+  CONTINENTS,
+  TRIP_TYPE_ICONS,
+  THEME_TAG_ICONS,
+  COUNTRY_FLAGS,
+  CONTINENT_IMAGES,
+  type Country
+} from '@/lib/dataStore';
+import type { Tag } from '@/lib/api';
+
 // API URL from environment variable
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
 
@@ -41,14 +52,8 @@ if (typeof window !== 'undefined') {
 // TYPES
 // ============================================
 
-interface Country {
-  id: number;
-  name: string;
-  nameHe: string;
-  continent: string;
-}
-
-interface Tag {
+// Local Tag type for search page (simplified, doesn't include API metadata)
+interface SearchTag {
   id: number;
   name: string;
   nameHe: string;
@@ -69,91 +74,10 @@ interface LocationSelection {
 // This ensures IDs always match the database and eliminates sync issues.
 // NO hardcoded fallback data - if API fails, UI shows error with retry.
 
-const CONTINENTS = [
-  { value: 'Africa', nameHe: 'אפריקה' },
-  { value: 'Asia', nameHe: 'אסיה' },
-  { value: 'Europe', nameHe: 'אירופה' },
-  { value: 'North & Central America', nameHe: 'צפון ומרכז אמריקה' },
-  { value: 'South America', nameHe: 'דרום אמריקה' },
-  { value: 'Oceania', nameHe: 'אוקיאניה' },
-  { value: 'Antarctica', nameHe: 'אנטארקטיקה' },
-];
-
 const MONTHS_HE = [
   'ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי', 'יוני',
   'יולי', 'אוגוסט', 'ספטמבר', 'אוקטובר', 'נובמבר', 'דצמבר'
 ];
-
-// Icon mapping for TYPE tags
-const TYPE_ICONS: Record<string, any> = {
-  'Geographic Depth': Globe,
-  'Carnivals & Festivals': Sparkles,
-  'African Safari': PawPrint,
-  'Train Tours': Train,
-  'Geographic Cruises': Ship,
-  'Nature Hiking': Mountain,
-  'Jeep Tours': Car,
-  'Snowmobile Tours': Snowflake,
-  'Private Groups': Users2,
-  'Photography': Camera,
-};
-
-const THEME_ICONS: Record<string, any> = {
-  'Hanukkah & Christmas Lights': TreePine,
-  'Extreme': TrendingUp,
-  'Wildlife': PawPrint,
-  'Cultural & Historical': Landmark,
-  'Food & Wine': Utensils,
-  'Beach & Island': Waves,
-  'Mountain': Mountain,
-  'Desert': Sun,
-  'Arctic & Snow': Snowflake,
-  'Tropical': Palmtree,
-};
-
-// Country code mapping for flags
-const COUNTRY_FLAGS: Record<string, string> = {
-  'South Africa': 'za',
-  'Egypt': 'eg',
-  'Morocco': 'ma',
-  'Kenya': 'ke',
-  'Tanzania': 'tz',
-  'Namibia': 'na',
-  'Japan': 'jp',
-  'Thailand': 'th',
-  'Vietnam': 'vn',
-  'Nepal': 'np',
-  'India': 'in',
-  'Jordan': 'jo',
-  'Turkey': 'tr',
-  'Greece': 'gr',
-  'Italy': 'it',
-  'Spain': 'es',
-  'France': 'fr',
-  'Iceland': 'is',
-  'Norway': 'no',
-  'Peru': 'pe',
-  'Argentina': 'ar',
-  'Brazil': 'br',
-  'Chile': 'cl',
-  'United States': 'us',
-  'Canada': 'ca',
-  'Costa Rica': 'cr',
-  'Australia': 'au',
-  'New Zealand': 'nz',
-  'Antarctica': 'aq',
-};
-
-// Continent background images
-const CONTINENT_IMAGES: Record<string, string> = {
-  'Europe': '/images/continents/europe.png',
-  'Africa': '/images/continents/africa.png',
-  'Antarctica': '/images/continents/antartica.png',
-  'Oceania': '/images/continents/ocenia.png',
-  'North & Central America': '/images/continents/north_america.png',
-  'Asia': '/images/continents/asia.png',
-  'South America': '/images/continents/south_america.png',
-};
 
 // ============================================
 // HELPER: Get current/future months only
@@ -259,7 +183,7 @@ function TagCircle({
   onClick,
   iconMap
 }: { 
-  tag: Tag; 
+  tag: SearchTag; 
   isSelected: boolean; 
   onClick: () => void;
   iconMap: Record<string, any>;
@@ -452,8 +376,8 @@ function SearchPageContent() {
   const [countriesError, setCountriesError] = useState(false);
 
   // Trip Types and Tags from API (no hardcoded fallback - relies on backend)
-  const [tripTypes, setTripTypes] = useState<Tag[]>([]);
-  const [themeTags, setThemeTags] = useState<Tag[]>([]);
+  const [tripTypes, setTripTypes] = useState<SearchTag[]>([]);
+  const [themeTags, setThemeTags] = useState<SearchTag[]>([]);
   const [isLoadingTypes, setIsLoadingTypes] = useState(true);
   const [typesError, setTypesError] = useState(false);
   
@@ -684,7 +608,7 @@ function SearchPageContent() {
       console.log('[SearchPage] Trip types data received:', typesResponse.data?.length || 0, 'types');
       
       if (typesResponse.data && typesResponse.data.length > 0) {
-        const mappedTypes: Tag[] = typesResponse.data.map((t: any) => ({
+        const mappedTypes: SearchTag[] = typesResponse.data.map((t: any) => ({
           id: t.id,
           name: t.name,
           nameHe: t.name_he || t.nameHe || t.name,
@@ -711,7 +635,7 @@ function SearchPageContent() {
       console.log('[SearchPage] Tags data received:', tagsResponse.data?.length || 0, 'tags');
       
       if (tagsResponse.data) {
-        const mappedTags: Tag[] = tagsResponse.data
+        const mappedTags: SearchTag[] = tagsResponse.data
           .filter((t: any) => t.category?.toUpperCase() === 'THEME' || t.category === 'Theme')
           .map((t: any) => ({
             id: t.id,
@@ -1120,9 +1044,11 @@ function SearchPageContent() {
             
             {/* Company Logo */}
             <div className="w-16 md:w-32 flex items-center justify-end">
-              <img 
+              <Image 
                 src="/images/logo/smartrip.png" 
                 alt="SmartTrip Logo" 
+                width={128}
+                height={64}
                 className="h-10 md:h-16 w-auto object-contain"
               />
             </div>
@@ -1286,7 +1212,7 @@ function SearchPageContent() {
                 tag={tag}
                 isSelected={selectedType === tag.id}
                 onClick={() => setSelectedType(selectedType === tag.id ? null : tag.id)}
-                iconMap={TYPE_ICONS}
+                iconMap={TRIP_TYPE_ICONS}
               />
             )) : (
               <div className="col-span-full text-center text-gray-500 py-4 text-sm">
@@ -1326,7 +1252,7 @@ function SearchPageContent() {
                 tag={tag}
                 isSelected={selectedThemes.includes(tag.id)}
                 onClick={() => toggleTheme(tag.id)}
-                iconMap={THEME_ICONS}
+                iconMap={THEME_TAG_ICONS}
               />
             )) : (
               <div className="col-span-full text-center text-gray-500 py-4 text-sm">
