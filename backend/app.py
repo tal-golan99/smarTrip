@@ -570,40 +570,59 @@ def _get_pixabay_image_url(country_name: str, width: int = 1200, height: int = 6
     }
     
     try:
+        print(f"[PIXABAY] Fetching image for '{country_name}' with query: '{query}'", flush=True)
         response = requests.get(pixabay_url, params=params, timeout=5)
+        print(f"[PIXABAY] API response status: {response.status_code} for '{country_name}'", flush=True)
         response.raise_for_status()
         data = response.json()
         
+        total_hits = data.get('total', 0)
         hits = data.get('hits', [])
+        print(f"[PIXABAY] API returned {len(hits)} hits (total: {total_hits}) for '{country_name}'", flush=True)
+        
         if hits:
             # Use first result (best/most popular match for this country)
             selected = hits[0]
             image_url = selected.get('webformatURL') or selected.get('largeImageURL')
             if image_url:
-                print(f"[PIXABAY] '{country_name}': found image (ID: {selected.get('id')})", flush=True)
+                print(f"[PIXABAY] '{country_name}': found image (ID: {selected.get('id')}) URL: {image_url[:80]}...", flush=True)
                 return image_url
+            else:
+                print(f"[PIXABAY] '{country_name}': hit found but no valid image URL in response", flush=True)
+        else:
+            print(f"[PIXABAY] '{country_name}': no hits returned for primary query '{query}'", flush=True)
         
         # No results - try fallback query
         fallback_query = f"{country_name} nature"
         params['q'] = fallback_query
+        print(f"[PIXABAY] Trying fallback query for '{country_name}': '{fallback_query}'", flush=True)
         response = requests.get(pixabay_url, params=params, timeout=5)
+        print(f"[PIXABAY] Fallback API response status: {response.status_code} for '{country_name}'", flush=True)
         response.raise_for_status()
         data = response.json()
         
+        total_hits = data.get('total', 0)
         hits = data.get('hits', [])
+        print(f"[PIXABAY] Fallback API returned {len(hits)} hits (total: {total_hits}) for '{country_name}'", flush=True)
+        
         if hits:
             selected = hits[0]
             image_url = selected.get('webformatURL') or selected.get('largeImageURL')
             if image_url:
-                print(f"[PIXABAY] '{country_name}': found image with fallback query '{fallback_query}' (ID: {selected.get('id')})", flush=True)
+                print(f"[PIXABAY] '{country_name}': found image with fallback query '{fallback_query}' (ID: {selected.get('id')}) URL: {image_url[:80]}...", flush=True)
                 return image_url
+            else:
+                print(f"[PIXABAY] '{country_name}': fallback hit found but no valid image URL in response", flush=True)
         
         # All queries failed - use placeholder
-        print(f"[PIXABAY] No images found for '{country_name}'", flush=True)
+        print(f"[PIXABAY] No images found for '{country_name}' after trying both primary and fallback queries", flush=True)
         return f"https://placehold.co/{width}x{height}/4A90E2/FFFFFF?text={requests.utils.quote(country_name)}"
     
+    except requests.exceptions.RequestException as e:
+        print(f"[PIXABAY] Request error fetching image for '{country_name}': {type(e).__name__}: {e}", flush=True)
+        return f"https://placehold.co/{width}x{height}/4A90E2/FFFFFF?text={requests.utils.quote(country_name)}"
     except Exception as e:
-        print(f"[PIXABAY] Error fetching image for '{country_name}': {e}", flush=True)
+        print(f"[PIXABAY] Unexpected error fetching image for '{country_name}': {type(e).__name__}: {e}", flush=True)
         return f"https://placehold.co/{width}x{height}/4A90E2/FFFFFF?text={requests.utils.quote(country_name)}"
 
 
@@ -634,44 +653,51 @@ def get_country_image(country_name: str):
     country_normalized = country_name.strip().lower()
     cache_key = f"{country_normalized}:{width}x{height}"
     
-    # Check cache first
-    if cache_key in _country_image_cache:
+    # Check for force refresh parameter
+    force_refresh = request.args.get('refresh', 'false').lower() == 'true'
+    
+    # Check cache first (unless force refresh)
+    if not force_refresh and cache_key in _country_image_cache:
         cached_entry = _country_image_cache[cache_key]
-        cached_url = cached_entry['url']
-        
-        # If cached URL is a placeholder, treat it as expired (force refresh)
-        # This handles cases where placeholder URLs were cached when API wasn't working
-        if 'placehold.co' in cached_url:
-            print(f"[PIXABAY] Cached placeholder detected for {country_name}, forcing refresh", flush=True)
-            del _country_image_cache[cache_key]
-        elif cached_entry['expires_at'] > datetime.now():
-            print(f"[PIXABAY] Cache hit for {country_name}", flush=True)
-            image_url = cached_url
-            
-            # If redirect requested, return redirect response
-            if redirect_param or format_param == 'redirect':
-                return redirect(image_url, code=302)
-            
-            # Otherwise return JSON
-            return jsonify({
-                'success': True,
-                'url': image_url,
-                'country': country_name,
-                'cached': True
-            }), 200
+        if cached_entry['expires_at'] > datetime.now():
+            cached_url = cached_entry['url']
+            # Skip cache if it's a placeholder
+            if 'placehold.co' not in cached_url:
+                print(f"[PIXABAY] Cache hit for {country_name}", flush=True)
+                image_url = cached_url
+                
+                # If redirect requested, return redirect response
+                if redirect_param or format_param == 'redirect':
+                    return redirect(image_url, code=302)
+                
+                # Otherwise return JSON
+                return jsonify({
+                    'success': True,
+                    'url': image_url,
+                    'country': country_name,
+                    'cached': True
+                }), 200
+            else:
+                # Cached placeholder - remove it and fetch fresh
+                print(f"[PIXABAY] Cached placeholder for {country_name}, removing and fetching fresh", flush=True)
+                del _country_image_cache[cache_key]
         else:
             # Cache expired, remove it
             del _country_image_cache[cache_key]
     
-    # Cache miss or expired - fetch from Pixabay
+    # Cache miss or expired or force refresh - fetch from Pixabay
     print(f"[PIXABAY] Cache miss for {country_name}, fetching from API", flush=True)
     image_url = _get_pixabay_image_url(country_name, width, height)
     
-    # Cache the result (7 days TTL)
-    _country_image_cache[cache_key] = {
-        'url': image_url,
-        'expires_at': datetime.now() + timedelta(days=7)
-    }
+    # Only cache real Pixabay URLs, not placeholders
+    if 'placehold.co' not in image_url:
+        _country_image_cache[cache_key] = {
+            'url': image_url,
+            'expires_at': datetime.now() + timedelta(days=7)
+        }
+        print(f"[PIXABAY] Cached real URL for {country_name}", flush=True)
+    else:
+        print(f"[PIXABAY] Placeholder returned for {country_name}, not caching", flush=True)
     
     # Clean up expired cache entries (simple cleanup - remove old entries)
     # This prevents memory leak if many countries are requested
