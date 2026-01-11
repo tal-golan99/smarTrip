@@ -637,9 +637,16 @@ def get_country_image(country_name: str):
     # Check cache first
     if cache_key in _country_image_cache:
         cached_entry = _country_image_cache[cache_key]
-        if cached_entry['expires_at'] > datetime.now():
+        cached_url = cached_entry['url']
+        
+        # If cached URL is a placeholder, treat it as expired (force refresh)
+        # This handles cases where placeholder URLs were cached when API wasn't working
+        if 'placehold.co' in cached_url:
+            print(f"[PIXABAY] Cached placeholder detected for {country_name}, forcing refresh", flush=True)
+            del _country_image_cache[cache_key]
+        elif cached_entry['expires_at'] > datetime.now():
             print(f"[PIXABAY] Cache hit for {country_name}", flush=True)
-            image_url = cached_entry['url']
+            image_url = cached_url
             
             # If redirect requested, return redirect response
             if redirect_param or format_param == 'redirect':
