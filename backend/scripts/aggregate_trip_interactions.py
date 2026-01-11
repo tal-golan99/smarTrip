@@ -37,19 +37,14 @@ def aggregate_trip_interactions():
     
     with engine.connect() as conn:
         try:
-            # Get event_type IDs
-            event_types = conn.execute(text("""
-                SELECT id, name FROM event_types
-            """)).fetchall()
-            type_map = {row[1]: row[0] for row in event_types}
+            # Use event_type string values (production database has event_type as string, not event_type_id)
+            impression_type = 'impression'
+            click_type = 'click_trip'
+            save_type = 'save_trip'
+            whatsapp_type = 'contact_whatsapp'
+            booking_type = 'booking_start'
             
-            impression_id = type_map.get('impression', 13)
-            click_id = type_map.get('click_trip', 8)
-            save_id = type_map.get('save_trip', 10)
-            whatsapp_id = type_map.get('contact_whatsapp', 15)
-            booking_id = type_map.get('booking_start', 18)
-            
-            print(f"\nEvent type IDs: impression={impression_id}, click={click_id}, save={save_id}")
+            print(f"\nEvent types: impression='{impression_type}', click='{click_type}', save='{save_type}'")
             
             # Get all trips with events
             print("\n[STEP 1] Getting trips with events...")
@@ -75,34 +70,35 @@ def aggregate_trip_interactions():
             
             for trip_id in trip_ids:
                 # Get aggregated metrics for this trip
+                # Note: Using event_type (string) instead of event_type_id (integer) for production compatibility
                 metrics = conn.execute(text("""
                     SELECT 
                         -- Total counts
-                        COUNT(*) FILTER (WHERE event_type_id = :impression_id) as impressions,
-                        COUNT(*) FILTER (WHERE event_type_id = :click_id) as clicks,
-                        COUNT(*) FILTER (WHERE event_type_id = :save_id) as saves,
-                        COUNT(*) FILTER (WHERE event_type_id = :whatsapp_id) as whatsapp,
-                        COUNT(*) FILTER (WHERE event_type_id = :booking_id) as bookings,
+                        COUNT(*) FILTER (WHERE event_type = :impression_type) as impressions,
+                        COUNT(*) FILTER (WHERE event_type = :click_type) as clicks,
+                        COUNT(*) FILTER (WHERE event_type = :save_type) as saves,
+                        COUNT(*) FILTER (WHERE event_type = :whatsapp_type) as whatsapp,
+                        COUNT(*) FILTER (WHERE event_type = :booking_type) as bookings,
                         
                         -- Unique counts
-                        COUNT(DISTINCT anonymous_id) FILTER (WHERE event_type_id = :impression_id) as unique_viewers,
-                        COUNT(DISTINCT anonymous_id) FILTER (WHERE event_type_id = :click_id) as unique_clickers,
+                        COUNT(DISTINCT anonymous_id) FILTER (WHERE event_type = :impression_type) as unique_viewers,
+                        COUNT(DISTINCT anonymous_id) FILTER (WHERE event_type = :click_type) as unique_clickers,
                         
                         -- 7-day counts
-                        COUNT(*) FILTER (WHERE event_type_id = :impression_id AND timestamp >= :seven_days) as impressions_7d,
-                        COUNT(*) FILTER (WHERE event_type_id = :click_id AND timestamp >= :seven_days) as clicks_7d,
+                        COUNT(*) FILTER (WHERE event_type = :impression_type AND timestamp >= :seven_days) as impressions_7d,
+                        COUNT(*) FILTER (WHERE event_type = :click_type AND timestamp >= :seven_days) as clicks_7d,
                         
                         -- Last click
-                        MAX(timestamp) FILTER (WHERE event_type_id = :click_id) as last_clicked
+                        MAX(timestamp) FILTER (WHERE event_type = :click_type) as last_clicked
                     FROM events
                     WHERE trip_id = :trip_id
                 """), {
                     'trip_id': trip_id,
-                    'impression_id': impression_id,
-                    'click_id': click_id,
-                    'save_id': save_id,
-                    'whatsapp_id': whatsapp_id,
-                    'booking_id': booking_id,
+                    'impression_type': impression_type,
+                    'click_type': click_type,
+                    'save_type': save_type,
+                    'whatsapp_type': whatsapp_type,
+                    'booking_type': booking_type,
                     'seven_days': seven_days_ago,
                 }).fetchone()
                 
