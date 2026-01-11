@@ -537,6 +537,10 @@ def get_tags():
 # Key: country name (normalized), Value: {url: str, expires_at: datetime}
 _country_image_cache = {}
 
+# Cache version - increment this to invalidate all cached entries
+# This allows clearing stale placeholder URLs without waiting for TTL expiration
+_CACHE_VERSION = 2  # Incremented from 1 to invalidate old placeholder URLs
+
 def _get_pixabay_image_url(country_name: str, width: int = 1200, height: int = 600) -> str:
     """
     Fetch landscape image URL from Pixabay API for a country.
@@ -631,8 +635,9 @@ def get_country_image(country_name: str):
     format_param = request.args.get('format', 'json').lower()
     
     # Normalize country name (lowercase for cache key)
+    # Include cache version to invalidate stale entries when needed
     country_normalized = country_name.strip().lower()
-    cache_key = f"{country_normalized}:{width}x{height}"
+    cache_key = f"v{_CACHE_VERSION}:{country_normalized}:{width}x{height}"
     
     # Check cache first
     if cache_key in _country_image_cache:
