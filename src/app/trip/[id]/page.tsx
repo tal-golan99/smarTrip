@@ -32,7 +32,7 @@ const getDynamicImage = (trip: Trip): string => {
   return getDynamicImageUrl(countryName);
 };
 
-// Reactive image component that updates when image loads
+// Hero image component - uses redirect URL that works in production
 function ReactiveHeroImage({ 
   countryName, 
   imageUrl, 
@@ -45,12 +45,12 @@ function ReactiveHeroImage({
   const [url, setUrl] = useState<string>(() => {
     // If explicit imageUrl provided, use it
     if (imageUrl) return imageUrl;
-    // Otherwise check cache or return placeholder
+    // Use getDynamicImageUrl which returns redirect URL or cached Pixabay URL
     return getDynamicImageUrl(countryName);
   });
   
   useEffect(() => {
-    // If explicit imageUrl provided, use it and don't listen for updates
+    // If explicit imageUrl provided, use it
     if (imageUrl) {
       setUrl(imageUrl);
       return;
@@ -58,35 +58,48 @@ function ReactiveHeroImage({
     
     if (!countryName) return;
     
-    const country = countryName.toLowerCase();
+    // Set initial URL (redirect URL or cached Pixabay URL)
+    const initialUrl = getDynamicImageUrl(countryName);
+    setUrl(initialUrl);
     
-    // Set initial URL (might be placeholder if not cached)
-    setUrl(getDynamicImageUrl(countryName));
-    
-    // Listen for image load events
+    // Listen for image load events to update when cache is populated
     const handleImageLoaded = (event: Event) => {
       const customEvent = event as CustomEvent<{ country: string; url: string }>;
-      if (customEvent.detail.country.toLowerCase() === country) {
+      const eventCountry = customEvent.detail.country?.toLowerCase();
+      if (eventCountry === countryName.toLowerCase() && customEvent.detail.url && !customEvent.detail.url.includes('placehold.co')) {
+        console.log(`[ReactiveHeroImage] Event matched, updating to Pixabay URL for ${countryName}`);
         setUrl(customEvent.detail.url);
       }
     };
     
     window.addEventListener('countryImageLoaded', handleImageLoaded);
     
-    // Also periodically check cache (fallback in case event is missed)
-    const checkInterval = setInterval(() => {
+    // Check cache periodically - when real Pixabay URL is cached, use it instead of redirect/placeholder
+    const checkCache = () => {
       const cachedUrl = getDynamicImageUrl(countryName);
-      // Only update if we got a real URL (not placeholder)
-      if (cachedUrl && !cachedUrl.includes('placehold.co') && cachedUrl !== url) {
-        setUrl(cachedUrl);
+      // Only update if we got a real Pixabay URL (not redirect URL, not placeholder)
+      if (cachedUrl && !cachedUrl.includes('placehold.co') && !cachedUrl.includes('/api/images/country/')) {
+        setUrl((currentUrl) => {
+          // Update if we're using redirect URL (production) or placeholder (localhost)
+          if (currentUrl !== cachedUrl && (currentUrl.includes('/api/images/country/') || currentUrl.includes('placehold.co'))) {
+            console.log(`[ReactiveHeroImage] Cache check found Pixabay URL for ${countryName}`);
+            return cachedUrl;
+          }
+          return currentUrl;
+        });
       }
-    }, 1000); // Check every second
+    };
+    
+    // Check cache periodically
+    // - Production: Redirect URL works immediately, this optimizes to direct URL when available
+    // - Localhost: Placeholder shows initially, this updates to real URL when available
+    const checkInterval = setInterval(checkCache, 1000);
     
     return () => {
       window.removeEventListener('countryImageLoaded', handleImageLoaded);
       clearInterval(checkInterval);
     };
-  }, [countryName, imageUrl, url]);
+  }, [countryName, imageUrl]);
   
   return (
     <div

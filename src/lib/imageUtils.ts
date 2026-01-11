@@ -13,20 +13,33 @@ const imageCache = new Map<string, string>();
 // API base URL (same as other API calls)
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
 
+// Detect if we're on localhost (function to evaluate at runtime)
+function isLocalhost(): boolean {
+  if (typeof window === 'undefined') {
+    // Server-side: check API_BASE_URL
+    return API_BASE_URL.includes('localhost');
+  }
+  // Client-side: check hostname and API_BASE_URL
+  return (
+    window.location.hostname === 'localhost' || 
+    window.location.hostname === '127.0.0.1' ||
+    API_BASE_URL.includes('localhost')
+  );
+}
+
 /**
  * Get dynamic image URL for a trip based on country name
  * 
  * Uses Pixabay API via backend endpoint. Backend handles caching and returns
- * the actual image URL. Falls back to placeholder if backend is unavailable.
+ * the actual image URL. Uses different strategies for localhost vs production:
  * 
- * IMPORTANT: This function returns a placeholder initially and fetches
- * the actual URL asynchronously. Components should use getDynamicImageUrlReactive()
- * or listen to 'countryImageLoaded' event for reactive updates.
+ * - **Production (HTTPS)**: Uses redirect URL for immediate display
+ * - **Localhost (HTTP)**: Uses placeholder initially, updates when cache is populated
  * 
  * @param countryName - Name of the country (e.g., "Samoa", "New Caledonia")
  * @param width - Image width (default: 1200)
  * @param height - Image height (default: 600)
- * @returns Placeholder URL initially, then actual URL once fetched (via cache)
+ * @returns Backend redirect URL (production) or placeholder (localhost) or cached Pixabay URL
  */
 export function getDynamicImageUrl(
   countryName: string | undefined,
@@ -36,24 +49,34 @@ export function getDynamicImageUrl(
   const country = countryName || 'landscape';
   const cacheKey = `${country.toLowerCase()}:${width}x${height}`;
   
-  // Check client-side cache first (populated by prefetch)
+  // Check client-side cache first (populated by prefetch or previous fetch)
+  // If we have cached Pixabay URL (not placeholder), use it directly
   if (imageCache.has(cacheKey)) {
     const cachedUrl = imageCache.get(cacheKey);
-    if (cachedUrl) {
+    if (cachedUrl && !cachedUrl.includes('placehold.co')) {
       return cachedUrl;
     }
   }
   
   // Start async fetch to populate cache (fire and forget)
-  // This ensures the actual URL is available on next render
+  // This will populate cache with real Pixabay URL for next render
   fetchCountryImage(country, width, height).catch(() => {
-    // Silently fail - placeholder will be used
+    // Silently fail - will use fallback
   });
   
-  // Return placeholder immediately (will be replaced once fetch completes)
-  // Components should use getDynamicImageUrlReactive() for reactive updates
+  // On localhost (HTTP), use placeholder initially
+  // Components will update when async fetch completes (via event listener)
+  // This avoids mixed content issues with HTTP → HTTPS redirects
+  if (isLocalhost()) {
+    const encodedCountry = encodeURIComponent(country);
+    return `https://placehold.co/${width}x${height}/4A90E2/FFFFFF?text=${encodedCountry}`;
+  }
+  
+  // On production (HTTPS), use redirect URL for immediate display
+  // Backend will redirect (302) to actual Pixabay image URL or placeholder
+  // HTTPS redirects work perfectly in production
   const encodedCountry = encodeURIComponent(country);
-  return `https://placehold.co/${width}x${height}/4A90E2/FFFFFF?text=${encodedCountry}`;
+  return `${API_BASE_URL}/api/images/country/${encodedCountry}?width=${width}&height=${height}&redirect=true`;
 }
 
 /**
@@ -88,9 +111,11 @@ async function fetchCountryImage(
         console.log(`[ImageUtils] Successfully loaded image for ${countryName}:`, data.url);
         // Trigger re-render by dispatching custom event (optional - can be used by components)
         if (typeof window !== 'undefined') {
-          window.dispatchEvent(new CustomEvent('countryImageLoaded', {
-            detail: { country: countryName, url: data.url }
-          }));
+          const event = new CustomEvent('countryImageLoaded', {
+            detail: { country: countryName, url: data.url, cacheKey }
+          });
+          console.log(`[ImageUtils] Dispatching countryImageLoaded event for: ${countryName}`);
+          window.dispatchEvent(event);
         }
       } else {
         console.warn(`[ImageUtils] Backend returned success=false for ${countryName}:`, data);
