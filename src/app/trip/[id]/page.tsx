@@ -32,6 +32,70 @@ const getDynamicImage = (trip: Trip): string => {
   return getDynamicImageUrl(countryName);
 };
 
+// Reactive image component that updates when image loads
+function ReactiveHeroImage({ 
+  countryName, 
+  imageUrl, 
+  className 
+}: { 
+  countryName?: string; 
+  imageUrl?: string;
+  className?: string;
+}) {
+  const [url, setUrl] = useState<string>(() => {
+    // If explicit imageUrl provided, use it
+    if (imageUrl) return imageUrl;
+    // Otherwise check cache or return placeholder
+    return getDynamicImageUrl(countryName);
+  });
+  
+  useEffect(() => {
+    // If explicit imageUrl provided, use it and don't listen for updates
+    if (imageUrl) {
+      setUrl(imageUrl);
+      return;
+    }
+    
+    if (!countryName) return;
+    
+    const country = countryName.toLowerCase();
+    
+    // Set initial URL (might be placeholder if not cached)
+    setUrl(getDynamicImageUrl(countryName));
+    
+    // Listen for image load events
+    const handleImageLoaded = (event: Event) => {
+      const customEvent = event as CustomEvent<{ country: string; url: string }>;
+      if (customEvent.detail.country.toLowerCase() === country) {
+        setUrl(customEvent.detail.url);
+      }
+    };
+    
+    window.addEventListener('countryImageLoaded', handleImageLoaded);
+    
+    // Also periodically check cache (fallback in case event is missed)
+    const checkInterval = setInterval(() => {
+      const cachedUrl = getDynamicImageUrl(countryName);
+      // Only update if we got a real URL (not placeholder)
+      if (cachedUrl && !cachedUrl.includes('placehold.co') && cachedUrl !== url) {
+        setUrl(cachedUrl);
+      }
+    }, 1000); // Check every second
+    
+    return () => {
+      window.removeEventListener('countryImageLoaded', handleImageLoaded);
+      clearInterval(checkInterval);
+    };
+  }, [countryName, imageUrl, url]);
+  
+  return (
+    <div
+      className={className}
+      style={{ backgroundImage: `url(${url})` }}
+    />
+  );
+}
+
 // Format date to DD.MM.YYYY
 const formatDate = (dateString?: string): string => {
   if (!dateString) return '';
@@ -296,8 +360,8 @@ export default function TripPage() {
           <div className="bg-gray-50 rounded-xl p-4 text-center">
             <Calendar className="w-6 h-6 text-[#12acbe] mx-auto mb-2" />
             <p className="text-xs text-gray-500 mb-1">תאריכים</p>
-            <p className="text-sm font-bold text-[#5a5a5a]" dir="ltr">
-              {formatDate(startDate)} - {formatDate(endDate)}
+            <p className="text-sm font-bold text-[#5a5a5a]">
+              {isPrivateGroup ? 'ניתן לקבוע מול המדריך' : `${formatDate(startDate)} - ${formatDate(endDate)}`}
             </p>
           </div>
           
