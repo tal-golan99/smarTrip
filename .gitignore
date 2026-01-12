@@ -32,6 +32,10 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+# Explicitly ignore frontend and backend env files
+frontend/.env.local
+frontend/.env
+backend/.env
 
 # vercel
 .vercel

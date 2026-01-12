@@ -17,7 +17,6 @@ python scripts/verify_schema.py            # Comprehensive schema verification
 python scripts/verify_seed.py              # Quick check after seeding
 
 # Scoring Analysis
-python scripts/analyze_scoring.py          # Analyze 30 scoring scenarios
 python scripts/analyze_scoring_v2.py       # Enhanced scoring analysis with insights
 ```
 
@@ -37,5 +36,4 @@ python scripts/analyze_scoring_v2.py       # Enhanced scoring analysis with insi
 
 | Script | Purpose |
 |--------|---------|
-| `analyze_scoring.py` | Analyzes 30 different scoring scenarios, calculates max possible score |
 | `analyze_scoring_v2.py` | Enhanced analysis with recommendations for weight tuning |

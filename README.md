@@ -145,7 +145,7 @@ python app.py
 npm install
 ```
 
-Create `.env.local`:
+Create `frontend/.env.local` (in the frontend directory):
 
 ```env
 # Backend API URL (required)
@@ -157,12 +157,22 @@ NEXT_PUBLIC_SUPABASE_URL=https://your-project-id.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key-here
 ```
 
+**Important:** 
+- The `.env.local` file must be in the `frontend/` directory (where `next.config.js` is located)
+- Next.js only reads environment files from the directory where it runs
+- This file is automatically gitignored and will not be committed
+
 **Note:** Supabase authentication is optional. If not configured, the app operates in guest mode, allowing users to browse and search trips without authentication.
 
 Start development server:
 
 ```bash
+# From project root
 npm run dev    # Starts on :3000
+
+# Or from frontend directory
+cd frontend
+npm run dev
 ```
 
 ---

@@ -13,11 +13,7 @@ from typing import Dict, List, Any, Optional
 from decimal import Decimal
 
 # Import database components
-import sys
-import os
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-from database import SessionLocal
+from app.core.database import SessionLocal
 from sqlalchemy import Column, Integer, String, Float, Boolean, DateTime, JSON, ARRAY, Text
 from sqlalchemy.dialects.postgresql import UUID as PGUUID, JSONB
 from sqlalchemy.ext.declarative import declarative_base

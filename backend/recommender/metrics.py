@@ -9,11 +9,7 @@ from datetime import datetime, date, timedelta
 from typing import Dict, List, Any, Optional
 import statistics
 
-import sys
-import os
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-from database import SessionLocal
+from app.core.database import SessionLocal
 
 
 class MetricsAggregator:
