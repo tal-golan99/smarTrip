@@ -3,8 +3,9 @@ services:
     name: smarttrip-backend
     env: python
     region: oregon
-    buildCommand: cd backend && pip install -r requirements.txt
-    startCommand: cd backend && gunicorn app.main:app
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app.main:app --bind 0.0.0.0:$PORT
     envVars:
       - key: FLASK_ENV
         value: production
