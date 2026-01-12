@@ -40,7 +40,7 @@ flowchart TB
     end
 
     subgraph Database["PostgreSQL"]
-        DB[(SmartTrip Database)]
+        DB[(SmartTrip Database<br/>Supabase)]
     end
 
     UI --> FE
@@ -66,13 +66,14 @@ flowchart TB
 | TypeScript 5 | Type safety |
 | Tailwind CSS 3.4 | Utility-first styling |
 | Lucide React | Icon library |
+| Supabase | Authentication and database client |
 
 ### Backend
 | Technology | Purpose |
 |------------|---------|
 | Flask 3.0 | Python web framework |
 | SQLAlchemy 2.0 | ORM and database toolkit |
-| PostgreSQL 12+ | Relational database |
+| PostgreSQL 12+ | Relational database (Supabase) |
 | APScheduler | Background job scheduling |
 | Gunicorn | Production WSGI server |
 
@@ -82,7 +83,7 @@ flowchart TB
 
 - **Node.js** 18+
 - **Python** 3.10+
-- **PostgreSQL** 12+
+- **PostgreSQL** 12+ (or Supabase account)
 - **npm** 9+ or **yarn**
 
 ---
@@ -92,7 +93,7 @@ flowchart TB
 ### 1. Clone the Repository
 
 ```bash
-git clone https://github.com/your-username/trip-recommendations.git
+git clone https://github.com/tal-golan99/smarTrip.git
 cd trip-recommendations
 ```
 
@@ -117,23 +118,29 @@ pip install -r requirements.txt
 Create `backend/.env`:
 
 ```env
-FLASK_APP=app.py
+FLASK_APP=app.main:app
 FLASK_ENV=development
 SECRET_KEY=your-secret-key-here
-DATABASE_URL=postgresql://user:password@localhost:5432/smarttrip
+DATABASE_URL=postgresql://postgres.xxxxx:[PASSWORD]@aws-0-us-west-2.pooler.supabase.com:5432/postgres?sslmode=require
 ALLOWED_ORIGINS=http://localhost:3000
+SUPABASE_JWT_SECRET=your-jwt-secret-here
 ```
 
-**Note:** For production, use your Supabase PostgreSQL connection string as the `DATABASE_URL`. The application will connect directly to your Supabase database.
+**Important:** 
+- Use **Session pooler** connection string (port 5432) for local development
+- Add `?sslmode=require` at the end of the connection string
+- Get the connection string from Supabase Dashboard → Settings → Database → Connection string → URI tab
 
 Initialize database and start:
 
 ```bash
 # For local development with empty database (optional)
-python scripts/seed.py
+python scripts/db/seed.py
 
 # Start development server
-python app.py
+python -m app.main
+# OR
+python app/main.py
 ```
 
 **Note:** In production, the application connects directly to your Supabase database. The seed script is only for local development with an empty database.
@@ -141,7 +148,9 @@ python app.py
 ### 3. Frontend Setup
 
 ```bash
-# From project root
+cd frontend
+
+# Install dependencies
 npm install
 ```
 
@@ -167,12 +176,9 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key-here
 Start development server:
 
 ```bash
-# From project root
-npm run dev    # Starts on :3000
-
-# Or from frontend directory
+# From frontend directory
 cd frontend
-npm run dev
+npm run dev    # Starts on :3000
 ```
 
 ---
@@ -182,24 +188,86 @@ npm run dev
 ### Development
 
 ```bash
-# Frontend
+# Frontend (from frontend/ directory)
 npm run dev          # Start Next.js dev server
 npm run lint         # Run ESLint
+npm run build        # Build for production
 
-# Backend
-python app.py        # Start Flask dev server
-python -m pytest     # Run test suite
+# Backend (from backend/ directory)
+python -m app.main   # Start Flask dev server
+python scripts/db/seed.py  # Seed database (optional)
 ```
 
 ### Production Build
 
 ```bash
 # Frontend
+cd frontend
 npm run build
 npm run start
 
 # Backend (via Gunicorn)
-gunicorn app:app
+cd backend
+gunicorn app.main:app --bind 0.0.0.0:$PORT
+```
+
+---
+
+## Project Structure
+
+```
+trip-recommendations/
+├── frontend/                    # Next.js frontend application
+│   ├── src/
+│   │   ├── app/                # Next.js App Router pages
+│   │   │   ├── auth/           # Authentication pages
+│   │   │   ├── search/         # Search UI
+│   │   │   └── trip/[id]/      # Trip detail page
+│   │   ├── components/         # React components
+│   │   ├── hooks/              # Custom React hooks
+│   │   ├── lib/                # Client-side libraries
+│   │   └── services/           # API and tracking services
+│   ├── public/                 # Static assets
+│   ├── .env.local             # Frontend environment variables
+│   ├── next.config.js         # Next.js configuration
+│   └── package.json          # Frontend dependencies
+│
+├── backend/                    # Flask backend application
+│   ├── app/                    # Main application package
+│   │   ├── api/                # API routes
+│   │   │   ├── events/         # Event tracking endpoints
+│   │   │   └── v2/             # API V2 endpoints
+│   │   ├── core/               # Core functionality
+│   │   │   ├── auth.py         # Authentication middleware
+│   │   │   ├── config.py       # Configuration management
+│   │   │   └── database.py     # Database connection
+│   │   ├── models/             # Database models
+│   │   │   ├── events.py       # Event models
+│   │   │   └── trip.py         # Trip models (Templates/Occurrences)
+│   │   ├── services/           # Business logic
+│   │   │   ├── events.py       # Event processing
+│   │   │   └── recommendation.py  # Recommendation algorithm
+│   │   └── main.py             # Flask application entry point
+│   ├── jobs/                   # Background jobs
+│   │   └── scheduler.py        # APScheduler configuration
+│   ├── migrations/             # Database migrations
+│   ├── recommender/            # Recommendation system
+│   │   ├── logging.py          # Request logging
+│   │   ├── metrics.py          # Performance metrics
+│   │   └── evaluation.py       # Quality evaluation
+│   ├── scripts/                # Development utilities
+│   │   ├── analytics/          # Analytics scripts
+│   │   ├── db/                 # Database scripts
+│   │   └── data_gen/           # Data generation scripts
+│   ├── .env                   # Backend environment variables
+│   ├── Procfile               # Production process file
+│   └── requirements.txt       # Python dependencies
+│
+├── docs/                      # Documentation
+├── .github/                   # GitHub configuration
+│   └── workflows/             # CI/CD workflows (future)
+├── vercel.json                # Vercel deployment config
+└── render.yaml                # Render deployment config
 ```
 
 ---
@@ -213,24 +281,29 @@ Base URL: `http://localhost:5000/api`
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | `GET` | `/health` | Health check endpoint |
-| `POST` | `/recommendations` | Get personalized trip recommendations |
+| `POST` | `/v2/recommendations` | Get personalized trip recommendations |
 
 ### Resource Endpoints
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| `GET` | `/trips` | List available trips |
-| `GET` | `/trips/:id` | Get trip details by ID |
-| `GET` | `/countries` | List all countries |
-| `GET` | `/trip-types` | List trip type categories |
-| `GET` | `/tags` | List theme tags |
-| `GET` | `/guides` | List tour guides |
-| `GET` | `/companies` | List trip providers |
+| `GET` | `/v2/locations` | List all countries |
+| `GET` | `/v2/trip-types` | List trip type categories |
+| `GET` | `/v2/tags` | List theme tags |
+| `GET` | `/v2/guides` | List tour guides |
+| `GET` | `/v2/companies` | List trip providers |
+
+### Event Tracking Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/events/batch` | Batch upload user events |
+| `GET` | `/events/stats` | Get event statistics |
 
 ### Recommendations
 
 ```http
-POST /api/recommendations
+POST /api/v2/recommendations
 Content-Type: application/json
 ```
 
@@ -288,45 +361,6 @@ For detailed algorithm documentation, see `docs/RECOMMENDATION_ENGINE_COMPREHENS
 
 ---
 
-## Project Structure
-
-```
-trip-recommendations/
-+-- src/
-|   +-- app/                    # Next.js App Router pages
-|   |   +-- search/             # Search UI
-|   |   +-- trip/[id]/          # Trip detail page
-|   +-- lib/
-|       +-- api.ts              # API client
-+-- backend/
-|   +-- app.py                  # Flask application entry point
-|   +-- api_v2.py               # REST API endpoints  
-|   +-- models_v2.py            # Database models
-|   +-- database.py             # Database connection management
-|   +-- auth_supabase.py        # Authentication middleware
-|   +-- scheduler.py            # Background job scheduler
-|   +-- events/                 # User event tracking
-|   |   +-- api.py              # Event endpoints
-|   |   +-- models.py           # Event models
-|   |   +-- service.py          # Event processing
-|   +-- recommender/            # Recommendation system
-|   |   +-- logging.py          # Request logging
-|   |   +-- metrics.py          # Performance metrics
-|   |   +-- evaluation.py       # Quality evaluation
-|   +-- scenarios/              # Test scenarios
-|   +-- scripts/                # Development utilities
-|   |   +-- seed.py             # Database seeding
-|   |   +-- generate_trips.py   # Test data generation
-|   |   +-- export_data.py      # Data export
-|   |   +-- verify_schema.py    # Schema validation
-+-- docs/                       # Technical documentation
-|   +-- archive/                # Archived migrations & backups
-+-- render.yaml                 # Render deployment config
-+-- pytest.ini                  # Pytest configuration 
-```
-
----
-
 ## Deployment
 
 ### Backend (Render)
@@ -334,24 +368,76 @@ trip-recommendations/
 1. Connect your repository to Render
 2. Create a new Web Service using the `render.yaml` configuration
 3. Set environment variables in Render dashboard:
-   - `DATABASE_URL` - Your Supabase PostgreSQL connection string
+   - `DATABASE_URL` - Your Supabase PostgreSQL connection string (Session pooler, port 5432)
    - `SECRET_KEY` - Flask secret key
    - `ALLOWED_ORIGINS` - Your frontend domain (e.g., `https://your-app.vercel.app`)
+   - `SUPABASE_JWT_SECRET` - From Supabase Settings → API → JWT Settings
    - `FLASK_ENV=production`
 4. Deploy
 
 The backend will automatically initialize the database schema on first deployment.
 
+**Important:** Use the **Session pooler** connection string (port 5432) with `?sslmode=require` for production.
+
 ### Frontend (Vercel)
 
 1. Import repository to Vercel
-2. Set environment variables:
+2. **Set Root Directory to `frontend`** in Vercel project settings:
+   - Go to Settings → General → Root Directory
+   - Set to `frontend`
+3. Set environment variables:
    ```
    NEXT_PUBLIC_API_URL=https://your-backend.onrender.com
    NEXT_PUBLIC_SUPABASE_URL=https://your-project-id.supabase.co
    NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key-here
    ```
-3. Deploy
+4. Deploy
+
+**Note:** The `vercel.json` file is configured, but you may also need to set the root directory in the Vercel dashboard.
+
+---
+
+## Environment Variables
+
+### Backend (`backend/.env`)
+
+| Variable | Description | Required |
+|---------|-------------|----------|
+| `FLASK_APP` | Flask application entry point | Yes (`app.main:app`) |
+| `FLASK_ENV` | Environment (development/production) | Yes |
+| `SECRET_KEY` | Flask secret key | Yes |
+| `DATABASE_URL` | PostgreSQL connection string | Yes |
+| `ALLOWED_ORIGINS` | CORS allowed origins (comma-separated) | Yes |
+| `SUPABASE_JWT_SECRET` | Supabase JWT secret for auth | Optional |
+
+### Frontend (`frontend/.env.local`)
+
+| Variable | Description | Required |
+|---------|-------------|----------|
+| `NEXT_PUBLIC_API_URL` | Backend API URL | Yes |
+| `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL | Optional |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase anonymous key | Optional |
+
+---
+
+## Database Connection
+
+### Supabase Connection Strings
+
+**For Local Development:**
+- Use **Session pooler** (port 5432)
+- Format: `postgresql://postgres.xxxxx:[PASSWORD]@aws-0-us-west-2.pooler.supabase.com:5432/postgres?sslmode=require`
+
+**For Production:**
+- Use **Session pooler** (port 5432)
+- Same format as local development
+
+**Important:** 
+- Always use port **5432** (Session pooler), not 6543 (Transaction pooler)
+- Always include `?sslmode=require` at the end
+- Get the connection string from Supabase Dashboard → Settings → Database → Connection string → **URI** tab
+
+See `docs/DATABASE_CONNECTION_GUIDE.md` and `docs/SUPABASE_CONNECTION_STRING_CHOICE.md` for detailed information.
 
 ---
 
@@ -359,15 +445,10 @@ The backend will automatically initialize the database schema on first deploymen
 
 Comprehensive documentation is available in the `docs/` folder:
 
-- `PROJECT_SUMMARY_COMPREHENSIVE.md` - Full project specification
-- `RECOMMENDATION_ENGINE_COMPREHENSIVE.md` - Algorithm deep dive
-- `MASTER_TEST_PLAN.md` - QA test strategy
-
-Generate PDFs:
-
-```bash
-python docs/generate_comprehensive_pdfs.py
-```
+- `DATABASE_CONNECTION_GUIDE.md` - Database connection troubleshooting
+- `SUPABASE_CONNECTION_STRING_CHOICE.md` - Which connection string to use
+- `DEPLOYMENT_CONFIGURATION.md` - Deployment setup guide
+- `PYTHON_PACKAGE_STRUCTURE.md` - Understanding `__init__.py` files
 
 ---
 
