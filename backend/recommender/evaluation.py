@@ -58,10 +58,7 @@ class ScenarioEvaluator:
             'scenarios'
         )
     
-    def load_scenarios(
-        self, 
-        category: Optional[str] = None,
-        scenario_ids: Optional[List[int]] = None
+    def load_scenarios(self, category: Optional[str] = None,scenario_ids: Optional[List[int]] = None
     ) -> List[Dict[str, Any]]:
         """
         Load evaluation scenarios from JSON files.

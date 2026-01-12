@@ -21,6 +21,7 @@ from app.services.events import (
     VALID_SOURCES,
     EVENT_CATEGORIES
 )
+from app.core.database import is_database_error
 
 # Import auth helper (optional - won't break if not available)
 try:
@@ -108,13 +109,27 @@ def start_session():
         import traceback
         traceback.print_exc()  # Print full stack trace to logs
         
-        # Return error details (helpful for debugging, but sanitized)
-        # In production, you might want to hide internal errors
-        return jsonify({
-            'success': False,
-            'error': error_msg if 'FLASK_ENV' in os.environ and os.environ['FLASK_ENV'] == 'development' else 'Session initialization failed',
-            'type': error_type
-        }), 500
+        # Check if it's a database connection error
+        is_db_error, is_conn_error = is_database_error(e)
+        
+        if is_conn_error:
+            return jsonify({
+                'success': False,
+                'error': 'Database connection unavailable. Please check your configuration or try again later.'
+            }), 503
+        elif is_db_error:
+            return jsonify({
+                'success': False,
+                'error': 'Database error occurred. Please try again later.'
+            }), 503
+        else:
+            # Return error details (helpful for debugging, but sanitized)
+            # In production, you might want to hide internal errors
+            return jsonify({
+                'success': False,
+                'error': error_msg if 'FLASK_ENV' in os.environ and os.environ['FLASK_ENV'] == 'development' else 'Session initialization failed',
+                'type': error_type
+            }), 500
 
 
 # ============================================
@@ -200,7 +215,20 @@ def track_event():
     
     except Exception as e:
         print(f"[EVENTS] Track event error: {e}", flush=True)
-        return jsonify({'success': False, 'error': str(e)}), 500
+        is_db_error, is_conn_error = is_database_error(e)
+        
+        if is_conn_error:
+            return jsonify({
+                'success': False,
+                'error': 'Database connection unavailable. Please check your configuration or try again later.'
+            }), 503
+        elif is_db_error:
+            return jsonify({
+                'success': False,
+                'error': 'Database error occurred. Please try again later.'
+            }), 503
+        else:
+            return jsonify({'success': False, 'error': str(e)}), 500
 
 
 @events_bp.route('/events/batch', methods=['POST'])
@@ -268,7 +296,20 @@ def track_events_batch():
     
     except Exception as e:
         print(f"[EVENTS] Batch tracking error: {e}", flush=True)
-        return jsonify({'success': False, 'error': str(e)}), 500
+        is_db_error, is_conn_error = is_database_error(e)
+        
+        if is_conn_error:
+            return jsonify({
+                'success': False,
+                'error': 'Database connection unavailable. Please check your configuration or try again later.'
+            }), 503
+        elif is_db_error:
+            return jsonify({
+                'success': False,
+                'error': 'Database error occurred. Please try again later.'
+            }), 503
+        else:
+            return jsonify({'success': False, 'error': str(e)}), 500
 
 
 # ============================================
@@ -309,7 +350,20 @@ def identify_user():
     
     except Exception as e:
         print(f"[EVENTS] User identify error: {e}", flush=True)
-        return jsonify({'success': False, 'error': str(e)}), 500
+        is_db_error, is_conn_error = is_database_error(e)
+        
+        if is_conn_error:
+            return jsonify({
+                'success': False,
+                'error': 'Database connection unavailable. Please check your configuration or try again later.'
+            }), 503
+        elif is_db_error:
+            return jsonify({
+                'success': False,
+                'error': 'Database error occurred. Please try again later.'
+            }), 503
+        else:
+            return jsonify({'success': False, 'error': str(e)}), 500
 
 
 # ============================================

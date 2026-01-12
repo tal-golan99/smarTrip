@@ -69,7 +69,6 @@ EXPECTED_FILES = {
     
     # Jobs
     'backend/jobs/__init__.py': True,
-    'backend/jobs/scheduler.py': True,
     
     # Scripts organization
     'backend/scripts/db/__init__.py': True,
@@ -146,7 +145,6 @@ IMPORT_TESTS = [
     ('app.services.recommendation', 'RecommendationConfig'),
     ('app.api.v2.routes', 'api_v2_bp'),
     ('app.api.events.routes', 'events_bp'),
-    ('jobs.scheduler', 'start_scheduler'),
 ]
 
 def check_file_structure():
@@ -335,38 +333,6 @@ def check_script_imports():
     
     return errors
 
-def check_scheduler_imports():
-    """Check scheduler imports scripts correctly"""
-    print("\n" + "="*80)
-    print("SCHEDULER IMPORTS CHECK")
-    print("="*80)
-    
-    errors = []
-    
-    scheduler_path = backend_path / 'jobs' / 'scheduler.py'
-    if scheduler_path.exists():
-        try:
-            content = scheduler_path.read_text(encoding='utf-8')
-        except UnicodeDecodeError:
-            content = scheduler_path.read_text(encoding='utf-8', errors='ignore')
-        
-        expected_imports = [
-            'from scripts.analytics.aggregate_trip_interactions import',
-            'from scripts.analytics.cleanup_sessions import',
-            'from scripts.analytics.aggregate_daily_metrics import',
-        ]
-        
-        for expected in expected_imports:
-            if expected in content:
-                print_success(f"Scheduler has correct import: {expected.split()[-1]}")
-            else:
-                print_error(f"Scheduler missing import: {expected}")
-                errors.append(f"Scheduler: {expected}")
-    else:
-        print_error("scheduler.py not found")
-        errors.append("jobs/scheduler.py")
-    
-    return errors
 
 def check_frontend_structure():
     """Check frontend structure"""
@@ -454,9 +420,6 @@ def main():
     all_warnings.extend(warnings)
     
     errors = check_script_imports()
-    all_errors.extend(errors)
-    
-    errors = check_scheduler_imports()
     all_errors.extend(errors)
     
     errors, warnings = check_frontend_structure()

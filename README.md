@@ -36,7 +36,6 @@ flowchart TB
 
     subgraph Render["Render"]
         BE["Flask API<br/>Python 3.10+"]
-        SCHED["APScheduler<br/>Background Jobs"]
     end
 
     subgraph Database["PostgreSQL"]
@@ -46,7 +45,6 @@ flowchart TB
     UI --> FE
     FE -->|"REST API"| BE
     BE --> DB
-    SCHED --> DB
 
     style Client fill:#f5f5f5,stroke:#333
     style Vercel fill:#000,stroke:#333,color:#fff
@@ -74,7 +72,6 @@ flowchart TB
 | Flask 3.0 | Python web framework |
 | SQLAlchemy 2.0 | ORM and database toolkit |
 | PostgreSQL 12+ | Relational database (Supabase) |
-| APScheduler | Background job scheduling |
 | Gunicorn | Production WSGI server |
 
 ---
@@ -248,8 +245,6 @@ trip-recommendations/
 │   │   │   ├── events.py       # Event processing
 │   │   │   └── recommendation.py  # Recommendation algorithm
 │   │   └── main.py             # Flask application entry point
-│   ├── jobs/                   # Background jobs
-│   │   └── scheduler.py        # APScheduler configuration
 │   ├── migrations/             # Database migrations
 │   ├── recommender/            # Recommendation system
 │   │   ├── logging.py          # Request logging

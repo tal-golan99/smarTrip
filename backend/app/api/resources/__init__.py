@@ -1,0 +1,3 @@
+"""
+Resources API Blueprint
+"""

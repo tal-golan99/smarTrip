@@ -4,23 +4,20 @@ Smart Recommendation Engine for Niche Travel
 """
 
 import os
-import requests
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify
 from flask_cors import CORS
 from dotenv import load_dotenv
-from app.core.database import init_db, db_session
-# V2 Migration: Use V2 models for shared entities (Country, Guide, Tag, TripType)
-# V1 Trip model is deprecated - frontend uses V2 TripTemplate/TripOccurrence
-from app.models.trip import Country, Guide, Tag, TripType, TripOccurrence, TripTemplate, TripStatus
-from sqlalchemy import and_, or_
-from sqlalchemy.orm import joinedload, selectinload
-from datetime import datetime, timedelta, date
 
-# Import recommendation logging (Phase 0)
+# Load environment variables FIRST, before any imports that depend on them
+load_dotenv()
+
+# Now import database and other modules that depend on environment variables
+from app.core.database import init_db, db_session, engine
+
+# Note: LOGGING_ENABLED is now checked in analytics blueprint
+# Keeping this import for backward compatibility if needed elsewhere
 try:
     from recommender.logging import get_logger, RecommendationLogger
-    from recommender.metrics import get_aggregator, MetricsAggregator
-    from recommender.evaluation import get_evaluator, ScenarioEvaluator
     LOGGING_ENABLED = True
 except ImportError as e:
     print(f"[WARNING] Recommender module not available: {e}")
@@ -29,7 +26,6 @@ except ImportError as e:
 # Import event tracking (Phase 1)
 try:
     from app.api.events.routes import events_bp
-    from app.services.events import classify_search
     EVENTS_ENABLED = True
 except ImportError as e:
     print(f"[WARNING] Events module not available: {e}")
@@ -43,22 +39,11 @@ except ImportError as e:
     print(f"[WARNING] API V2 module not available: {e}")
     API_V2_ENABLED = False
 
-# Import Background Scheduler (Phase 1 - Background Jobs)
-try:
-    from jobs.scheduler import start_scheduler, get_scheduler_status
-    SCHEDULER_ENABLED = True
-except ImportError as e:
-    print(f"[WARNING] Scheduler module not available: {e}")
-    SCHEDULER_ENABLED = False
+# Import new blueprints
+from app.api.system.routes import system_bp
+from app.api.resources.routes import resources_bp
+from app.api.analytics.routes import analytics_bp
 
-# Load environment variables
-load_dotenv()
-
-# ============================================
-# RECOMMENDATION ALGORITHM CONFIGURATION
-# ============================================
-# Import recommendation configuration from service module
-from app.services.recommendation import SCORING_WEIGHTS, SCORE_THRESHOLDS, RecommendationConfig
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -97,6 +82,12 @@ if API_V2_ENABLED:
 else:
     print("[INIT] API V2 module not available")
 
+# Register new blueprints (no url_prefix - routes define full paths)
+app.register_blueprint(system_bp)
+app.register_blueprint(resources_bp)
+app.register_blueprint(analytics_bp)
+print("[INIT] System, Resources, and Analytics blueprints registered")
+
 
 # ============================================
 # DATABASE LIFECYCLE
@@ -105,6 +96,8 @@ else:
 @app.before_request
 def before_request():
     """Attach database session to request context"""
+    # Scoped session automatically handles Flask application context
+    # No explicit binding needed - scoped_session uses thread-local storage
     pass
 
 
@@ -128,341 +121,6 @@ def root():
     }), 200
 
 
-@app.route('/api/health', methods=['GET'])
-def health_check():
-    """Health check endpoint - V2 Schema"""
-    try:
-        # V2 Migration: Use V2 models (TripOccurrence instead of Trip)
-        occurrence_count = db_session.query(TripOccurrence).count()
-        template_count = db_session.query(TripTemplate).count()
-        country_count = db_session.query(Country).count()
-        guide_count = db_session.query(Guide).count()
-        tag_count = db_session.query(Tag).count()
-        trip_type_count = db_session.query(TripType).count()
-        return jsonify({
-            'status': 'healthy',
-            'service': 'SmartTrip API',
-            'version': '2.0.0',
-            'schema': 'V2 (Templates + Occurrences)',
-            'database': {
-                'trip_occurrences': occurrence_count,
-                'trip_templates': template_count,
-                'countries': country_count,
-                'guides': guide_count,
-                'tags': tag_count,
-                'trip_types': trip_type_count
-            }
-        }), 200
-    except Exception as e:
-        return jsonify({
-            'status': 'unhealthy',
-            'error': str(e)
-        }), 500
-
-
-@app.route('/api/seed', methods=['POST'])
-def manual_seed():
-    """
-    Seed database with programmatically generated data (DEVELOPMENT ONLY).
-    
-    This endpoint is restricted to development environments only.
-    Production should use Supabase data directly.
-    
-    Use this for local development/testing with empty database.
-    """
-    # Restrict to development only
-    is_production = os.getenv('FLASK_ENV') == 'production' or os.getenv('ENV') == 'production'
-    
-    if is_production:
-        return jsonify({
-            'success': False,
-            'error': 'This endpoint is disabled in production. Use Supabase data directly.'
-        }), 403
-    
-    try:
-        import sys
-        import os
-        # Add scripts to path for import
-        # __file__ is backend/app/main.py, so go up two levels to backend/
-        backend_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        scripts_path = os.path.join(backend_path, 'scripts')
-        if scripts_path not in sys.path:
-            sys.path.insert(0, scripts_path)
-        from scripts.db.seed import seed_database  # type: ignore[import-untyped]
-        
-        print("[SEED] Seeding database with programmatically generated data (DEV ONLY)", flush=True)
-        seed_database()
-        
-        # V2 Migration: Count V2 models instead of V1 Trip
-        occurrence_count = db_session.query(TripOccurrence).count()
-        template_count = db_session.query(TripTemplate).count()
-        
-        return jsonify({
-            'success': True,
-            'message': 'Database seeded successfully with generated data (DEV ONLY)',
-            'trip_templates': template_count,
-            'trip_occurrences': occurrence_count,
-            'note': 'This endpoint is for local development only. Production uses Supabase data.'
-        }), 200
-    except Exception as e:
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
-
-
-# ============================================
-# LOCATIONS API (Countries + Continents for Frontend)
-# ============================================
-
-@app.route('/api/locations', methods=['GET'])
-def get_locations():
-    """Get ALL countries and continents for the search dropdown - NO FILTERING"""
-    try:
-        # CRITICAL: Fetch ALL countries from the database
-        # Do NOT filter by trips - show every country available
-        countries = db_session.query(Country).order_by(Country.name_he).all()
-        
-        print(f"[LOCATIONS] Found {len(countries)} TOTAL countries in database (no filtering)", flush=True)
-        
-        # Debug: Log first 5 countries to verify data
-        if countries:
-            sample_countries = [f"{c.name} ({c.name_he})" for c in countries[:5]]
-            print(f"[LOCATIONS] Sample countries: {sample_countries}", flush=True)
-        
-        # Build continents list from unique values
-        # Convert enum to string to avoid comparison issues
-        continents_set = set()
-        for country in countries:
-            if country.continent:
-                # Convert Continent enum to its string value
-                continent_str = country.continent.name if hasattr(country.continent, 'name') else str(country.continent)
-                continents_set.add(continent_str)
-        
-        # Map continents to Hebrew names
-        continent_names_he = {
-            'AFRICA': 'אפריקה',
-            'ASIA': 'אסיה',
-            'EUROPE': 'אירופה',
-            'NORTH_AND_CENTRAL_AMERICA': 'צפון ומרכז אמריקה',
-            'SOUTH_AMERICA': 'דרום אמריקה',
-            'OCEANIA': 'אוקיאניה',
-            'ANTARCTICA': 'אנטארקטיקה'
-        }
-        
-        continent_display_names = {
-            'AFRICA': 'Africa',
-            'ASIA': 'Asia',
-            'EUROPE': 'Europe',
-            'NORTH_AND_CENTRAL_AMERICA': 'North & Central America',
-            'SOUTH_AMERICA': 'South America',
-            'OCEANIA': 'Oceania',
-            'ANTARCTICA': 'Antarctica'
-        }
-        
-        # Convert enum set to list and sort by display name
-        continents_list = []
-        for c in sorted(continents_set):  # Sort the set first for consistency
-            continents_list.append({
-                'value': continent_display_names.get(c, c),
-                'nameHe': continent_names_he.get(c, c)
-            })
-        
-        # Convert countries with proper continent string conversion
-        countries_list = []
-        for c in countries:
-            continent_str = c.continent.name if hasattr(c.continent, 'name') else str(c.continent)
-            countries_list.append({
-                'id': c.id,
-                'name': c.name,
-                'name_he': c.name_he,
-                'continent': continent_display_names.get(continent_str, continent_str)
-            })
-        
-        print(f"[LOCATIONS] Returning {len(countries_list)} countries to frontend", flush=True)
-        
-        return jsonify({
-            'success': True,
-            'count': len(countries_list),
-            'countries': countries_list,
-            'continents': continents_list
-        }), 200
-    
-    except Exception as e:
-        print(f"[LOCATIONS] Error: {str(e)}", flush=True)
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
-
-
-# ============================================
-# COUNTRIES API
-# ============================================
-
-@app.route('/api/countries', methods=['GET'])
-def get_countries():
-    """Get all countries, optionally filtered by continent"""
-    continent = request.args.get('continent')
-    
-    try:
-        query = db_session.query(Country)
-        
-        # Exclude Antarctica from country list (users select it via continent instead)
-        query = query.filter(Country.name != 'Antarctica')
-        
-        if continent:
-            query = query.filter(Country.continent == continent)
-        
-        countries = query.order_by(Country.name).all()
-        
-        return jsonify({
-            'success': True,
-            'count': len(countries),
-            'data': [country.to_dict() for country in countries]
-        }), 200
-    
-    except Exception as e:
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
-
-
-@app.route('/api/countries/<int:country_id>', methods=['GET'])
-def get_country(country_id):
-    """Get a specific country by ID"""
-    try:
-        country = db_session.query(Country).filter(Country.id == country_id).first()
-        
-        if not country:
-            return jsonify({
-                'success': False,
-                'error': 'Country not found'
-            }), 404
-        
-        return jsonify({
-            'success': True,
-            'data': country.to_dict()
-        }), 200
-    
-    except Exception as e:
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
-
-
-# ============================================
-# GUIDES API
-# ============================================
-
-@app.route('/api/guides', methods=['GET'])
-def get_guides():
-    """Get all active guides"""
-    try:
-        guides = db_session.query(Guide).filter(Guide.is_active == True).order_by(Guide.name).all()
-        
-        return jsonify({
-            'success': True,
-            'count': len(guides),
-            'data': [guide.to_dict() for guide in guides]
-        }), 200
-    
-    except Exception as e:
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
-
-
-@app.route('/api/guides/<int:guide_id>', methods=['GET'])
-def get_guide(guide_id):
-    """Get a specific guide by ID"""
-    try:
-        guide = db_session.query(Guide).filter(Guide.id == guide_id).first()
-        
-        if not guide:
-            return jsonify({
-                'success': False,
-                'error': 'Guide not found'
-            }), 404
-        
-        return jsonify({
-            'success': True,
-            'data': guide.to_dict()
-        }), 200
-    
-    except Exception as e:
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
-
-
-# ============================================
-# TRIP TYPES API
-# ============================================
-
-@app.route('/api/trip-types', methods=['GET'])
-def get_trip_types():
-    # Handle preflight OPTIONS request
-    if request.method == 'OPTIONS':
-        response = jsonify({})
-        response.headers.add('Access-Control-Allow-Origin', request.headers.get('Origin', '*'))
-        response.headers.add('Access-Control-Allow-Methods', 'GET, OPTIONS')
-        response.headers.add('Access-Control-Allow-Headers', 'Content-Type, Authorization')
-        return response
-    """Get all trip types (trip styles)"""
-    try:
-        trip_types = db_session.query(TripType).order_by(TripType.name).all()
-        
-        return jsonify({
-            'success': True,
-            'count': len(trip_types),
-            'data': [trip_type.to_dict() for trip_type in trip_types]
-        }), 200
-    
-    except Exception as e:
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
-
-
-# ============================================
-# TAGS API (THEMES ONLY)
-# ============================================
-
-@app.route('/api/tags', methods=['GET'])
-def get_tags():
-    # Handle preflight OPTIONS request
-    if request.method == 'OPTIONS':
-        response = jsonify({})
-        response.headers.add('Access-Control-Allow-Origin', request.headers.get('Origin', '*'))
-        response.headers.add('Access-Control-Allow-Methods', 'GET, OPTIONS')
-        response.headers.add('Access-Control-Allow-Headers', 'Content-Type, Authorization')
-        return response
-    """Get all theme tags (trip interests/themes only)
-    
-    Note: After schema migration, this endpoint only returns THEME tags.
-    For trip styles, use /api/trip-types endpoint.
-    """
-    try:
-        # All tags are now theme tags (category column dropped in V2 migration)
-        tags = db_session.query(Tag).order_by(Tag.name).all()
-        
-        return jsonify({
-            'success': True,
-            'count': len(tags),
-            'data': [tag.to_dict() for tag in tags]
-        }), 200
-    
-    except Exception as e:
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
 
 
 # ============================================
@@ -485,259 +143,6 @@ def internal_error(error):
     }), 500
 
 
-# ============================================
-# METRICS & EVALUATION API (Phase 0)
-# ============================================
-
-@app.route('/api/metrics', methods=['GET'])
-def get_metrics():
-    """
-    Get current recommendation metrics (summary).
-    
-    Query params:
-    - days: Number of days to include (default 7)
-    
-    Returns aggregated metrics for the time period.
-    """
-    if not LOGGING_ENABLED:
-        return jsonify({
-            'success': False,
-            'error': 'Metrics module not available'
-        }), 503
-    
-    try:
-        days = request.args.get('days', default=7, type=int)
-        days = max(1, min(days, 90))  # Clamp between 1 and 90
-        
-        aggregator = get_aggregator()
-        metrics = aggregator.get_current_metrics(days=days)
-        
-        return jsonify({
-            'success': True,
-            'data': metrics
-        }), 200
-    
-    except Exception as e:
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
-
-
-@app.route('/api/metrics/daily', methods=['GET'])
-def get_daily_metrics():
-    """
-    Get daily breakdown of recommendation metrics.
-    
-    Query params:
-    - start: Start date (YYYY-MM-DD, default 7 days ago)
-    - end: End date (YYYY-MM-DD, default today)
-    
-    Returns list of daily metrics.
-    """
-    if not LOGGING_ENABLED:
-            return jsonify({
-                'success': False,
-            'error': 'Metrics module not available'
-        }), 503
-    
-    try:
-        # Parse date parameters
-        end_date = date.today()
-        start_date = end_date - timedelta(days=7)
-        
-        if request.args.get('start'):
-            try:
-                start_date = datetime.fromisoformat(request.args.get('start')).date()
-            except ValueError:
-                pass
-        
-        if request.args.get('end'):
-            try:
-                end_date = datetime.fromisoformat(request.args.get('end')).date()
-            except ValueError:
-                pass
-        
-        # Limit range to 90 days
-        if (end_date - start_date).days > 90:
-            start_date = end_date - timedelta(days=90)
-        
-        aggregator = get_aggregator()
-        metrics = aggregator.get_metrics_range(start=start_date, end=end_date)
-        
-        return jsonify({
-            'success': True,
-            'start': start_date.isoformat(),
-            'end': end_date.isoformat(),
-            'count': len(metrics),
-            'data': metrics
-        }), 200
-    
-    except Exception as e:
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
-
-
-@app.route('/api/metrics/top-searches', methods=['GET'])
-def get_top_searches():
-    """
-    Get top search patterns (continents, types, etc.)
-    
-    Query params:
-    - days: Number of days to analyze (default 7)
-    - limit: Max items per category (default 10)
-    """
-    if not LOGGING_ENABLED:
-        return jsonify({
-            'success': False,
-            'error': 'Metrics module not available'
-        }), 503
-    
-    try:
-        days = request.args.get('days', default=7, type=int)
-        limit = request.args.get('limit', default=10, type=int)
-        
-        days = max(1, min(days, 90))
-        limit = max(1, min(limit, 50))
-        
-        aggregator = get_aggregator()
-        top_searches = aggregator.get_top_searches(days=days, limit=limit)
-        
-        return jsonify({
-            'success': True,
-            'data': top_searches
-        }), 200
-    
-    except Exception as e:
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
-
-
-@app.route('/api/evaluation/run', methods=['POST'])
-def run_evaluation():
-    """
-    Run evaluation scenarios and get results.
-    
-    Input JSON:
-    {
-        "category": "core_persona",  // optional filter
-        "scenario_ids": [1, 2, 3],   // optional specific IDs
-    }
-    
-    Returns evaluation report with pass/fail status for each scenario.
-    """
-    if not LOGGING_ENABLED:
-        return jsonify({
-            'success': False,
-            'error': 'Evaluation module not available'
-        }), 503
-    
-    try:
-        data = request.get_json(silent=True) or {}
-        category = data.get('category')
-        scenario_ids = data.get('scenario_ids')
-        
-        # Validate scenario_ids
-        if scenario_ids is not None:
-            if not isinstance(scenario_ids, list):
-                scenario_ids = None
-            else:
-                scenario_ids = [int(i) for i in scenario_ids if isinstance(i, (int, str))]
-        
-        # Get base URL from request
-        base_url = request.url_root.rstrip('/')
-        
-        evaluator = get_evaluator(base_url=base_url)
-        report = evaluator.run_all_scenarios(
-            category=category,
-            scenario_ids=scenario_ids
-        )
-        
-        return jsonify(report), 200
-    
-    except Exception as e:
-        import traceback
-        print(f"[EVALUATION] Error: {traceback.format_exc()}", flush=True)
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
-
-
-@app.route('/api/evaluation/scenarios', methods=['GET'])
-def get_evaluation_scenarios():
-    """
-    Get available evaluation scenarios.
-    
-    Query params:
-    - category: Filter by category (optional)
-    
-    Returns list of scenarios without running them.
-    """
-    if not LOGGING_ENABLED:
-        return jsonify({
-            'success': False,
-            'error': 'Evaluation module not available'
-        }), 503
-    
-    try:
-        category = request.args.get('category')
-        
-        evaluator = get_evaluator()
-        scenarios = evaluator.load_scenarios(category=category)
-        
-        # Return simplified list (without preferences details)
-        scenario_list = []
-        for s in scenarios:
-            scenario_list.append({
-                'id': s.get('id'),
-                'name': s.get('name'),
-                'description': s.get('description'),
-                'category': s.get('category'),
-                'expected_min_results': s.get('expected_min_results'),
-            })
-        
-            return jsonify({
-                'success': True,
-            'count': len(scenario_list),
-            'data': scenario_list
-        }), 200
-    
-    except Exception as e:
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
-
-
-# ============================================
-# SCHEDULER STATUS ENDPOINT
-# ============================================
-
-@app.route('/api/scheduler/status', methods=['GET'])
-def scheduler_status():
-    """Get background scheduler status and job information"""
-    if not SCHEDULER_ENABLED:
-        return jsonify({
-            'success': False,
-            'error': 'Scheduler module not available'
-        }), 503
-    
-    try:
-        status = get_scheduler_status()
-        return jsonify({
-            'success': True,
-            'data': status
-        }), 200
-    except Exception as e:
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
 
 
 # ============================================
@@ -755,16 +160,6 @@ with app.app_context():
         print("[WARNING] App will start but database operations may fail until connection is restored.")
         print("[WARNING] This is normal if DATABASE_URL is not set or database is temporarily unavailable.")
 
-# Start background scheduler (runs in-process with Flask)
-# This starts the scheduler when the module is loaded (works with gunicorn)
-if SCHEDULER_ENABLED:
-    try:
-        start_scheduler()
-        print("[INIT] Background scheduler started (Phase 1 jobs)")
-    except Exception as e:
-        print(f"[WARNING] Failed to start scheduler: {e}")
-else:
-    print("[INIT] Scheduler not available")
 
 if __name__ == '__main__':
     # Run Flask development server
@@ -773,6 +168,5 @@ if __name__ == '__main__':
     
     print(f"SmartTrip API running on http://{host}:{port}")
     print(f"API Documentation: http://{host}:{port}/api/health")
-    print(f"Scheduler Status: http://{host}:{port}/api/scheduler/status")
     
     app.run(host=host, port=port, debug=True)

@@ -16,7 +16,7 @@ from sqlalchemy import and_, or_, extract, func
 from sqlalchemy.orm import joinedload, selectinload
 from datetime import datetime, timedelta
 
-from app.core.database import db_session
+from app.core.database import db_session, is_database_error
 from app.models.trip import (
     Company, TripTemplate, TripOccurrence, TripTemplateTag, TripTemplateCountry,
     Country, Guide, TripType, Tag, TripStatus, Continent
@@ -634,7 +634,22 @@ def get_recommendations_v2():
     except Exception as e:
         import traceback
         print(f"[V2 RECOMMENDATIONS] Error: {traceback.format_exc()}")
-        return jsonify({'success': False, 'error': str(e), 'api_version': 'v2'}), 500
+        is_db_error, is_conn_error = is_database_error(e)
+        
+        if is_conn_error:
+            return jsonify({
+                'success': False,
+                'error': 'Database connection unavailable. Please check your configuration or try again later.',
+                'api_version': 'v2'
+            }), 503
+        elif is_db_error:
+            return jsonify({
+                'success': False,
+                'error': 'Database error occurred. Please try again later.',
+                'api_version': 'v2'
+            }), 503
+        else:
+            return jsonify({'success': False, 'error': str(e), 'api_version': 'v2'}), 500
 
 
 # ============================================

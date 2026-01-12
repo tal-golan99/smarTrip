@@ -6,15 +6,16 @@ V2 Schema: Uses models_v2.Base for table creation
 import os
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker, scoped_session
+from sqlalchemy.exc import OperationalError, DatabaseError
 # V2 Migration: Use V2 Base for table creation
 from app.models.trip import Base
 from dotenv import load_dotenv
 
-# Load environment variables
+# Load environment variables (if not already loaded by main.py)
+# This ensures database.py can be imported independently if needed
 load_dotenv()
 
 # Get database URL from environment
-# Default to SQLite for local development if no DATABASE_URL is set
 DATABASE_URL = os.getenv('DATABASE_URL', 'sqlite:///./smarttrip.db')
 
 # Some providers use postgres:// but SQLAlchemy requires postgresql://
@@ -77,7 +78,46 @@ def init_db():
         # Don't raise - allow app to start without DB
 
 
-def drop_db():
-    """Drop all database tables (use with caution!)"""
-    Base.metadata.drop_all(bind=engine)
-    print("WARNING: All database tables dropped!")
+def is_database_error(exception):
+    """
+    Check if an exception is a database connection/authentication error.
+    
+    Returns:
+        tuple: (is_db_error: bool, is_connection_error: bool)
+        - is_db_error: True if it's any database-related error
+        - is_connection_error: True if it's specifically a connection/auth error
+    """
+    # Check for SQLAlchemy database errors
+    if isinstance(exception, (OperationalError, DatabaseError)):
+        error_str = str(exception).lower()
+        # Check for connection/auth errors
+        connection_indicators = [
+            'connection',
+            'authentication',
+            'password',
+            'circuit breaker',
+            'too many authentication errors',
+            'could not connect',
+            'connection refused',
+            'connection timeout'
+        ]
+        is_conn_error = any(indicator in error_str for indicator in connection_indicators)
+        return (True, is_conn_error)
+    
+    # Check for psycopg2 errors (wrapped in SQLAlchemy)
+    error_str = str(exception).lower()
+    if 'psycopg2' in error_str or 'operationalerror' in error_str:
+        connection_indicators = [
+            'connection',
+            'authentication',
+            'password',
+            'circuit breaker',
+            'too many authentication errors',
+            'could not connect',
+            'connection refused',
+            'connection timeout'
+        ]
+        is_conn_error = any(indicator in error_str for indicator in connection_indicators)
+        return (True, is_conn_error)
+    
+    return (False, False)

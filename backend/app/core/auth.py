@@ -19,6 +19,7 @@ Usage:
             return jsonify({'message': 'Guest access'})
 """
 
+
 import os
 import jwt
 from typing import Optional, Dict, Any
