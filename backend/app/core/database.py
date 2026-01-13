@@ -22,9 +22,9 @@ DATABASE_URL = os.getenv('DATABASE_URL', 'sqlite:///./smarttrip.db')
 if DATABASE_URL.startswith('postgres://'):
     DATABASE_URL = DATABASE_URL.replace('postgres://', 'postgresql://', 1)
 
-# Ensure SSL mode for cloud databases (Supabase, etc.)
-if 'supabase' in DATABASE_URL and 'sslmode' not in DATABASE_URL:
-    DATABASE_URL = DATABASE_URL + ('&' if '?' in DATABASE_URL else '?') + 'sslmode=require'
+# Note: SSL mode is only added if not already present in the connection string
+# If your Supabase project has SSL disabled, do not add sslmode=require
+# The connection string from Supabase Dashboard should already have the correct SSL settings
 
 # Create engine with connection pooling
 # For Supabase pooler, use smaller pool size

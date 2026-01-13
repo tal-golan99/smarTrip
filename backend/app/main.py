@@ -169,4 +169,6 @@ if __name__ == '__main__':
     print(f"SmartTrip API running on http://{host}:{port}")
     print(f"API Documentation: http://{host}:{port}/api/health")
     
-    app.run(host=host, port=port, debug=True)
+    # Disable reloader to prevent double connection attempts to database
+    # This prevents circuit breaker issues and connection pool exhaustion
+    app.run(host=host, port=port, debug=True, use_reloader=False)
