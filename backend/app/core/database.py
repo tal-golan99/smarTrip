@@ -4,23 +4,77 @@ V2 Schema: Uses models_v2.Base for table creation
 """
 
 import os
+from urllib.parse import quote_plus, unquote_plus
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker, scoped_session
 from sqlalchemy.exc import OperationalError, DatabaseError
 # V2 Migration: Use V2 Base for table creation
 from app.models.trip import Base
-from dotenv import load_dotenv
-
-# Load environment variables (if not already loaded by main.py)
-# This ensures database.py can be imported independently if needed
-load_dotenv()
 
 # Get database URL from environment
+# Note: Environment variables are loaded by main.py before this module is imported
 DATABASE_URL = os.getenv('DATABASE_URL', 'sqlite:///./smarttrip.db')
 
 # Some providers use postgres:// but SQLAlchemy requires postgresql://
 if DATABASE_URL.startswith('postgres://'):
     DATABASE_URL = DATABASE_URL.replace('postgres://', 'postgresql://', 1)
+
+# Fix: URL-encode special characters in password and remove brackets if connection string appears malformed
+# This handles cases where password contains @, #, %, etc. or has brackets that break URL parsing
+if DATABASE_URL.startswith('postgresql://') and '@' in DATABASE_URL:
+    try:
+        # Check if connection string has multiple @ symbols (indicates unencoded @ in password)
+        at_count = DATABASE_URL.count('@')
+        if at_count > 1:
+            # Multiple @ symbols - password likely contains unencoded @
+            # Find the last @ which should be the separator
+            last_at_index = DATABASE_URL.rfind('@')
+            scheme_user_pass = DATABASE_URL[:last_at_index]
+            host_part = DATABASE_URL[last_at_index + 1:]
+            
+            if '://' in scheme_user_pass:
+                scheme, user_pass = scheme_user_pass.split('://', 1)
+                if ':' in user_pass:
+                    user, password = user_pass.split(':', 1)
+                    # Remove brackets if present
+                    if password.startswith('[') and password.endswith(']'):
+                        password = password[1:-1]
+                        print(f"[DB] Removed brackets from password")
+                    # URL-encode the password (handles @, #, %, etc.)
+                    encoded_password = quote_plus(password)
+                    # Reconstruct the connection string
+                    DATABASE_URL = f"{scheme}://{user}:{encoded_password}@{host_part}"
+                    print(f"[DB] Fixed connection string - URL-encoded password with special characters")
+        else:
+            # Single @ - check if host part is malformed (starts with ] or other invalid chars)
+            parts = DATABASE_URL.split('@', 1)
+            if len(parts) == 2:
+                host_part = parts[1]
+                if host_part.startswith(']') or (not host_part.startswith(('aws-', 'localhost', '127.0.0.1', 'postgres')) and ':' in host_part):
+                    # Host part is malformed - likely password has brackets or unencoded special chars
+                    scheme_user_pass = parts[0]
+                    if '://' in scheme_user_pass:
+                        scheme, user_pass = scheme_user_pass.split('://', 1)
+                        if ':' in user_pass:
+                            user, password = user_pass.split(':', 1)
+                            # Remove brackets if present
+                            if password.startswith('[') and password.endswith(']'):
+                                password = password[1:-1]
+                                print(f"[DB] Removed brackets from password")
+                            # URL-encode the password
+                            encoded_password = quote_plus(password)
+                            # Reconstruct - need to find the actual host part
+                            # If host_part starts with ], the actual host is after the next @
+                            if host_part.startswith(']'):
+                                # Find the actual host (after the ] and @)
+                                actual_host = host_part[1:] if not host_part.startswith(']@') else host_part[2:]
+                            else:
+                                actual_host = host_part
+                            DATABASE_URL = f"{scheme}://{user}:{encoded_password}@{actual_host}"
+                            print(f"[DB] Fixed connection string - removed brackets and URL-encoded password")
+    except Exception as e:
+        # If parsing fails, continue with original URL (will fail with clearer error)
+        print(f"[WARNING] Could not parse DATABASE_URL for password encoding: {e}")
 
 # Ensure SSL mode for cloud databases (Supabase, etc.)
 if 'supabase' in DATABASE_URL and 'sslmode' not in DATABASE_URL:
@@ -42,6 +96,12 @@ engine = create_engine(
         'connect_timeout': 10,  # 10 second timeout
     } if 'postgresql' in DATABASE_URL else {}
 )
+
+# Clear any stale connections on module import
+try:
+    engine.dispose()
+except Exception:
+    pass  # Ignore errors during disposal
 
 # Create session factory
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)

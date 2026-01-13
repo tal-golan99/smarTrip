@@ -9,7 +9,10 @@ from flask_cors import CORS
 from dotenv import load_dotenv
 
 # Load environment variables FIRST, before any imports that depend on them
-load_dotenv()
+# Load .env first (base configuration), then .env.local (local overrides)
+# This allows local development to override settings without affecting production
+load_dotenv()  # Load .env
+load_dotenv('.env.local', override=True)  # Load .env.local if it exists, overriding .env values
 
 # Now import database and other modules that depend on environment variables
 from app.core.database import init_db, db_session, engine
@@ -169,4 +172,6 @@ if __name__ == '__main__':
     print(f"SmartTrip API running on http://{host}:{port}")
     print(f"API Documentation: http://{host}:{port}/api/health")
     
-    app.run(host=host, port=port, debug=True)
+    # Disable reloader to prevent double connection attempts to database
+    # This fixes the issue where connections work in production but fail locally
+    app.run(host=host, port=port, debug=True, use_reloader=False)
