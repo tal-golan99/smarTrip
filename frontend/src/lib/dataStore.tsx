@@ -10,7 +10,7 @@
 
 'use client';
 
-import React, { useState, useEffect, useCallback, createContext, useContext, ReactNode } from 'react';
+import React, { useState, useEffect, useCallback, useRef, createContext, useContext, ReactNode } from 'react';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
 
@@ -99,6 +99,7 @@ export function DataStoreProvider({ children }: { children: ReactNode }) {
   
   const [isColdStart, setIsColdStart] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
+  const hasInitiallyLoaded = useRef(false);
 
   // Helper function to detect cold start errors
   const detectColdStart = (error: any): boolean => {
@@ -126,52 +127,68 @@ export function DataStoreProvider({ children }: { children: ReactNode }) {
     
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 second timeout for cold starts
+      const timeoutId = setTimeout(() => controller.abort(), 60000);
       
       const response = await fetch(`${API_URL}/api/locations`, {
         signal: controller.signal,
       });
       clearTimeout(timeoutId);
       
-      if (!response.ok) throw new Error('Failed to fetch countries');
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('[DataStore] Countries fetch failed:', { status: response.status, statusText: response.statusText, body: errorText });
+        throw new Error(`Failed to fetch countries: ${response.status} ${response.statusText}`);
+      }
+      
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        const text = await response.text();
+        console.error('[DataStore] Countries response is not JSON:', { contentType, body: text.substring(0, 200) });
+        throw new Error('Response is not JSON');
+      }
       
       const data = await response.json();
-      if (data.success && data.data) {
-        const mapped: Country[] = data.data.map((c: any) => ({
+      
+      if (data.success && data.countries) {
+        const mapped: Country[] = data.countries.map((c: any) => ({
           id: c.id,
           name: c.name,
           nameHe: c.name_he || c.nameHe || c.name,
           continent: c.continent,
         }));
         setCountries(mapped);
-        setIsColdStart(false); // Success, clear cold start flag
+        setIsColdStart(false);
         setRetryCount(0);
       } else {
-        throw new Error(data.error || 'Invalid response');
+        const errorMsg = data.error || `Invalid response: expected success=true and countries array, got success=${data.success}, hasCountries=${!!data.countries}`;
+        console.error('[DataStore] Invalid locations response:', { data, responseStatus: response.status, responseStatusText: response.statusText });
+        throw new Error(errorMsg);
       }
     } catch (error) {
       console.error('[DataStore] Countries fetch error:', error);
       
-      // Detect if this is a cold start issue
       if (detectColdStart(error)) {
         setIsColdStart(true);
         setCountriesError('cold_start');
         
-        // Auto-retry once after 5 seconds for cold starts
-        if (retryCount === 0) {
-          setRetryCount(1);
-          setTimeout(() => {
-            console.log('[DataStore] Auto-retrying after cold start detection...');
-            refreshCountries();
-          }, 5000);
-        }
+        setRetryCount((prev) => {
+          if (prev === 0) {
+            const retryFunction = refreshCountries;
+            setTimeout(() => {
+              console.log('[DataStore] Auto-retrying after cold start detection...');
+              retryFunction();
+            }, 5000);
+            return 1;
+          }
+          return prev;
+        });
       } else {
         setCountriesError(error instanceof Error ? error.message : 'Failed to load countries');
       }
     } finally {
       setIsLoadingCountries(false);
     }
-  }, [retryCount]);
+  }, []);
 
   const refreshTripTypes = useCallback(async () => {
     setIsLoadingTripTypes(true);
@@ -186,7 +203,9 @@ export function DataStoreProvider({ children }: { children: ReactNode }) {
       });
       clearTimeout(timeoutId);
       
-      if (!response.ok) throw new Error('Failed to fetch trip types');
+      if (!response.ok) {
+        throw new Error('Failed to fetch trip types');
+      }
       
       const data = await response.json();
       if (data.success && data.data) {
@@ -214,7 +233,7 @@ export function DataStoreProvider({ children }: { children: ReactNode }) {
     } finally {
       setIsLoadingTripTypes(false);
     }
-  }, [retryCount]);
+  }, []);
 
   const refreshThemeTags = useCallback(async () => {
     setIsLoadingThemeTags(true);
@@ -229,11 +248,12 @@ export function DataStoreProvider({ children }: { children: ReactNode }) {
       });
       clearTimeout(timeoutId);
       
-      if (!response.ok) throw new Error('Failed to fetch tags');
+      if (!response.ok) {
+        throw new Error('Failed to fetch tags');
+      }
       
       const data = await response.json();
       if (data.success && data.data) {
-        // Only include THEME tags
         const mapped: ThemeTag[] = data.data
           .filter((t: any) => t.category === 'THEME')
           .map((t: any) => ({
@@ -260,7 +280,7 @@ export function DataStoreProvider({ children }: { children: ReactNode }) {
     } finally {
       setIsLoadingThemeTags(false);
     }
-  }, [retryCount]);
+  }, []);
 
   const refreshAll = useCallback(async () => {
     await Promise.all([
@@ -291,12 +311,18 @@ export function DataStoreProvider({ children }: { children: ReactNode }) {
   }, [countries]);
 
   // ----------------------------------------
-  // Initial Load
+  // Initial Load (only once on mount)
   // ----------------------------------------
   
   useEffect(() => {
-    refreshAll();
-  }, [refreshAll]);
+    if (!hasInitiallyLoaded.current) {
+      hasInitiallyLoaded.current = true;
+      refreshCountries();
+      refreshTripTypes();
+      refreshThemeTags();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // ----------------------------------------
   // Computed Values

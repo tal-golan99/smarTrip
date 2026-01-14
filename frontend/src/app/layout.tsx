@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Assistant } from "next/font/google";
 import "./globals.css";
+import { DataStoreProvider } from '@/lib/dataStore';
 
 const assistant = Assistant({
   subsets: ['latin', 'hebrew'],
@@ -21,7 +22,9 @@ export default function RootLayout({
   return (
     <html lang="he" dir="rtl">
       <body className={`${assistant.className} antialiased`}>
-        {children}
+        <DataStoreProvider>
+          {children}
+        </DataStoreProvider>
       </body>
     </html>
   );

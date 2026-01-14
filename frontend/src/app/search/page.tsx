@@ -20,10 +20,8 @@ import {
 } from '@/hooks/useTracking';
 
 // Supabase auth imports
-import { getCurrentUser, supabase, isAuthAvailable } from '@/lib/supabaseClient';
-
-// API functions with retry logic
-import { getLocations, getTripTypes, getTags } from '@/services/api.service';
+import { supabase, isAuthAvailable } from '@/lib/supabaseClient';
+import { useUser } from '@/hooks/useUser';
 
 // Data store imports
 import { 
@@ -32,9 +30,12 @@ import {
   THEME_TAG_ICONS,
   COUNTRY_FLAGS,
   CONTINENT_IMAGES,
+  useCountries,
+  useTripTypes,
+  useThemeTags,
+  useDataStore,
   type Country
 } from '@/lib/dataStore';
-import type { Tag } from '@/services/api.service';
 
 // API URL from environment variable
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
@@ -74,40 +75,9 @@ interface LocationSelection {
 // This ensures IDs always match the database and eliminates sync issues.
 // NO hardcoded fallback data - if API fails, UI shows error with retry.
 
-const MONTHS_HE = [
-  'ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי', 'יוני',
-  'יולי', 'אוגוסט', 'ספטמבר', 'אוקטובר', 'נובמבר', 'דצמבר'
-];
-
-// ============================================
-// HELPER: Get current/future months only
-// ============================================
-
-function getAvailableMonths(selectedYear: string): { index: number; name: string }[] {
-  const now = new Date();
-  const currentYear = now.getFullYear();
-  const currentMonth = now.getMonth(); // 0-indexed
-
-  // If no year selected or future year, show all months
-  if (selectedYear === 'all' || parseInt(selectedYear) > currentYear) {
-    return MONTHS_HE.map((name, index) => ({ index: index + 1, name }));
-  }
-
-  // If current year, only show current and future months
-  if (parseInt(selectedYear) === currentYear) {
-    return MONTHS_HE
-      .map((name, index) => ({ index: index + 1, name }))
-      .filter(m => m.index > currentMonth);
-  }
-
-  // Past year - show no months (shouldn't happen with year restriction)
-  return [];
-}
-
-function getAvailableYears(): string[] {
-  const currentYear = new Date().getFullYear();
-  return [currentYear.toString(), (currentYear + 1).toString(), (currentYear + 2).toString()];
-}
+import { getAvailableMonths, getAvailableYears } from '@/lib/utils';
+import { DualRangeSlider } from '@/components/features/DualRangeSlider';
+import { LogoutConfirmModal } from '@/components/features/LogoutConfirmModal';
 
 // ============================================
 // SUB-COMPONENTS
@@ -218,149 +188,6 @@ function TagCircle({
 // DUAL RANGE SLIDER COMPONENT
 // ============================================
 
-function DualRangeSlider({
-  min,
-  max,
-  minValue,
-  maxValue,
-  step = 1,
-  minGap = 3,
-  onChange,
-  label
-}: {
-  min: number;
-  max: number;
-  minValue: number;
-  maxValue: number;
-  step?: number;
-  minGap?: number;
-  onChange: (min: number, max: number) => void;
-  label: string;
-}) {
-  const minThumbRef = useRef<HTMLDivElement>(null);
-  const maxThumbRef = useRef<HTMLDivElement>(null);
-  const trackRef = useRef<HTMLDivElement>(null);
-  const [isDraggingMin, setIsDraggingMin] = useState(false);
-  const [isDraggingMax, setIsDraggingMax] = useState(false);
-
-  const getPercentage = useCallback((value: number) => {
-    return ((value - min) / (max - min)) * 100;
-  }, [min, max]);
-
-  const getValue = useCallback((percentage: number) => {
-    const rawValue = (percentage / 100) * (max - min) + min;
-    return Math.round(rawValue / step) * step;
-  }, [min, max, step]);
-
-  const handleMouseMove = useCallback((e: MouseEvent | TouchEvent) => {
-    if (!trackRef.current) return;
-    
-    // Prevent page scrolling when dragging slider on mobile
-    if ('touches' in e) {
-      e.preventDefault();
-    }
-
-    const rect = trackRef.current.getBoundingClientRect();
-    const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
-    // For RTL: calculate from right edge instead of left
-    const percentage = Math.max(0, Math.min(100, ((rect.right - clientX) / rect.width) * 100));
-    const newValue = getValue(percentage);
-
-    if (isDraggingMin) {
-      const maxAllowed = maxValue - minGap;
-      const clampedValue = Math.min(Math.max(min, newValue), maxAllowed);
-      onChange(clampedValue, maxValue);
-    } else if (isDraggingMax) {
-      const minAllowed = minValue + minGap;
-      const clampedValue = Math.max(Math.min(max, newValue), minAllowed);
-      onChange(minValue, clampedValue);
-    }
-  }, [isDraggingMin, isDraggingMax, minValue, maxValue, minGap, min, max, getValue, onChange]);
-
-  const handleMouseUp = useCallback(() => {
-    setIsDraggingMin(false);
-    setIsDraggingMax(false);
-  }, []);
-
-  useEffect(() => {
-    if (isDraggingMin || isDraggingMax) {
-      document.addEventListener('mousemove', handleMouseMove);
-      document.addEventListener('mouseup', handleMouseUp);
-      // Use passive: false to allow preventDefault() in touch events
-      document.addEventListener('touchmove', handleMouseMove, { passive: false });
-      document.addEventListener('touchend', handleMouseUp);
-    }
-
-    return () => {
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
-      document.removeEventListener('touchmove', handleMouseMove as EventListener);
-      document.removeEventListener('touchend', handleMouseUp);
-    };
-  }, [isDraggingMin, isDraggingMax, handleMouseMove, handleMouseUp]);
-
-  return (
-    <div className="w-full">
-      <label className="block text-sm font-medium mb-3 text-right">
-        {label}: <span className="text-[#076839] font-bold">{minValue}-{maxValue} ימים</span>
-      </label>
-      
-      {/* RTL Slider: Apply dir="rtl" to flip slider direction (min on right, max on left) */}
-      <div className="relative h-10 flex items-center" dir="rtl">
-        {/* Track Background */}
-        <div 
-          ref={trackRef}
-          className="absolute w-full h-2 bg-gray-200 rounded-full"
-        />
-        
-        {/* Active Track (highlighted range) - Turquoise */}
-        <div 
-          className="absolute h-2 bg-[#12acbe] rounded-full"
-          style={{
-            right: `${getPercentage(minValue)}%`,
-            width: `${getPercentage(maxValue) - getPercentage(minValue)}%`
-          }}
-        />
-        
-        {/* Min Thumb - Turquoise (on right in RTL) */}
-        <div
-          ref={minThumbRef}
-          className={clsx(
-            'absolute w-6 h-6 bg-[#12acbe] rounded-full cursor-grab shadow-lg border-2 border-white',
-            'flex items-center justify-center transform translate-x-1/2 transition-transform touch-none',
-            isDraggingMin && 'cursor-grabbing scale-110'
-          )}
-          style={{ right: `${getPercentage(minValue)}%` }}
-          onMouseDown={() => setIsDraggingMin(true)}
-          onTouchStart={(e) => {
-            e.preventDefault();
-            setIsDraggingMin(true);
-          }}
-        >
-          <span className="text-white text-[10px] font-bold">{minValue}</span>
-        </div>
-        
-        {/* Max Thumb - Turquoise (on left in RTL) */}
-        <div
-          ref={maxThumbRef}
-          className={clsx(
-            'absolute w-6 h-6 bg-[#12acbe] rounded-full cursor-grab shadow-lg border-2 border-white',
-            'flex items-center justify-center transform translate-x-1/2 transition-transform touch-none',
-            isDraggingMax && 'cursor-grabbing scale-110'
-          )}
-          style={{ right: `${getPercentage(maxValue)}%` }}
-          onMouseDown={() => setIsDraggingMax(true)}
-          onTouchStart={(e) => {
-            e.preventDefault();
-            setIsDraggingMax(true);
-          }}
-        >
-          <span className="text-white text-[10px] font-bold">{maxValue}</span>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 // ============================================
 // MAIN COMPONENT
@@ -370,20 +197,30 @@ function SearchPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   
-  // Countries from API (no hardcoded fallback - relies on backend)
-  const [countries, setCountries] = useState<Country[]>([]);
-  const [isLoadingCountries, setIsLoadingCountries] = useState(true);
-  const [countriesError, setCountriesError] = useState(false);
+  // Use DataStore hooks instead of local state and fetching
+  const { countries, isLoading: isLoadingCountries, error: countriesError } = useCountries();
+  const { tripTypes: tripTypesData, isLoading: isLoadingTripTypes, error: tripTypesError } = useTripTypes();
+  const { themeTags: themeTagsData, isLoading: isLoadingThemeTags, error: themeTagsError } = useThemeTags();
+  const { refreshAll } = useDataStore();
 
-  // Trip Types and Tags from API (no hardcoded fallback - relies on backend)
-  const [tripTypes, setTripTypes] = useState<SearchTag[]>([]);
-  const [themeTags, setThemeTags] = useState<SearchTag[]>([]);
-  const [isLoadingTypes, setIsLoadingTypes] = useState(true);
-  const [typesError, setTypesError] = useState(false);
-  
-  // Cold start detection
-  const [isColdStart, setIsColdStart] = useState(false);
-  const [retryAttempt, setRetryAttempt] = useState(0);
+  // Map DataStore types to SearchTag format for compatibility
+  const tripTypes: SearchTag[] = tripTypesData.map(t => ({
+    id: t.id,
+    name: t.name,
+    nameHe: t.nameHe || t.name,
+    category: 'Type' as const
+  }));
+
+  const themeTags: SearchTag[] = themeTagsData.map(t => ({
+    id: t.id,
+    name: t.name,
+    nameHe: t.nameHe || t.name,
+    category: 'Theme' as const
+  }));
+
+  // Combined loading and error states
+  const isLoadingTypes = isLoadingTripTypes || isLoadingThemeTags;
+  const typesError = tripTypesError || themeTagsError;
 
   // Location search state
   const [locationSearch, setLocationSearch] = useState('');
@@ -414,72 +251,11 @@ function SearchPageContent() {
   const availableMonths = useMemo(() => getAvailableMonths(selectedYear), [selectedYear]);
   
   // User authentication state
-  const [userName, setUserName] = useState<string | null>(null);
-  const [isLoadingUser, setIsLoadingUser] = useState(true);
+  const { userName, isLoading: isLoadingUser } = useUser();
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   
   // Phase 1: Track page view (non-blocking)
   usePageView('search');
-  
-  // Load user name on mount and listen for auth changes
-  useEffect(() => {
-    const loadUser = async () => {
-      if (!isAuthAvailable() || !supabase) {
-        setIsLoadingUser(false);
-        return;
-      }
-      
-      try {
-        const user = await getCurrentUser();
-        if (user) {
-          // Try to get full name from user metadata or email
-          const metadata = user.user_metadata || {};
-          let fullName = null;
-          if (metadata.full_name) {
-            fullName = metadata.full_name;
-          } else if (metadata.name) {
-            fullName = metadata.name;
-          } else if (metadata.first_name && metadata.last_name) {
-            fullName = `${metadata.first_name} ${metadata.last_name}`;
-          } else if (metadata.first_name) {
-            fullName = metadata.first_name;
-          } else if (metadata.last_name) {
-            fullName = metadata.last_name;
-          } else if (user.email && user.email.split('@')[0]) {
-            fullName = user.email.split('@')[0];
-          } else {
-            fullName = null;
-          }
-          setUserName(fullName);
-        } else {
-          setUserName(null);
-        }
-      } catch (error) {
-        console.error('[SearchPage] Error loading user:', error);
-        setUserName(null);
-      } finally {
-        setIsLoadingUser(false);
-      }
-    };
-    
-    loadUser();
-    
-    // Listen for auth state changes
-    if (supabase) {
-      const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-        if (session?.user) {
-          loadUser();
-        } else {
-          setUserName(null);
-          setIsLoadingUser(false);
-        }
-      });
-      
-      return () => {
-        subscription.unsubscribe();
-      };
-    }
-  }, []);
   
   // Show logout confirmation dialog
   const handleLogout = () => {
@@ -494,7 +270,6 @@ function SearchPageContent() {
     
     try {
       await supabase.auth.signOut();
-      setUserName(null);
       setShowLogoutConfirm(false);
       router.push('/auth?redirect=/search');
     } catch (error) {
@@ -541,143 +316,8 @@ function SearchPageContent() {
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'instant' });
   }, []);
-  // Fetch countries from API - callable for retry
-  // Now uses apiFetch() with automatic retry logic for cold starts
-  const fetchCountries = useCallback(async () => {
-    setIsLoadingCountries(true);
-    setCountriesError(false);
-    try {
-      console.log('[SearchPage] Fetching countries from API (with retry logic)...');
-      
-      const response = await getLocations();
-      
-      if (!response.success || !response.data) {
-        console.error('[SearchPage] Countries API error:', response.error);
-        setCountriesError(true);
-        setIsLoadingCountries(false);
-        return;
-      }
-      
-      console.log('[SearchPage] Countries data received:', response.data.countries?.length || 0, 'countries');
-      
-      if (response.data.countries && response.data.countries.length > 0) {
-        const mappedCountries: Country[] = response.data.countries.map((c: any) => ({
-          id: c.id,
-          name: c.name,
-          nameHe: c.name_he || c.nameHe || c.name,
-          continent: c.continent
-        }));
-        setCountries(mappedCountries);
-        setIsColdStart(false);
-        setRetryAttempt(0);
-      } else {
-        console.error('[SearchPage] No countries in response. Response data:', response.data);
-        setCountriesError(true);
-      }
-    } catch (error: any) {
-      console.error('[SearchPage] Failed to fetch countries from API:', error);
-      console.error('[SearchPage] Error details:', {
-        name: error?.name,
-        message: error?.message,
-        type: error?.constructor?.name
-      });
-      
-      setCountriesError(true);
-      setIsLoadingCountries(false);
-    }
-  }, [retryAttempt]);
-
-  // Fetch trip types and tags from API - callable for retry
-  // Now uses apiFetch() with automatic retry logic for cold starts
-  const fetchTypesAndTags = useCallback(async () => {
-    setIsLoadingTypes(true);
-    setTypesError(false);
-    try {
-      console.log('[SearchPage] Fetching trip types from API (with retry logic)...');
-      
-      // Fetch trip types
-      const typesResponse = await getTripTypes();
-      
-      if (!typesResponse.success || !typesResponse.data) {
-        console.error('[SearchPage] Trip types API error:', typesResponse.error);
-        setTypesError(true);
-        setIsLoadingTypes(false);
-        return;
-      }
-      
-      console.log('[SearchPage] Trip types data received:', typesResponse.data?.length || 0, 'types');
-      
-      if (typesResponse.data && typesResponse.data.length > 0) {
-        const mappedTypes: SearchTag[] = typesResponse.data.map((t: any) => ({
-          id: t.id,
-          name: t.name,
-          nameHe: t.name_he || t.nameHe || t.name,
-          category: 'Type'
-        }));
-        setTripTypes(mappedTypes);
-      } else {
-        console.error('[SearchPage] No trip types in response. Response data:', typesResponse.data);
-        setTypesError(true);
-      }
-
-      console.log('[SearchPage] Fetching tags from API (with retry logic)...');
-      
-      // Fetch tags (themes)
-      const tagsResponse = await getTags();
-      
-      if (!tagsResponse.success || !tagsResponse.data) {
-        console.error('[SearchPage] Tags API error:', tagsResponse.error);
-        setTypesError(true);
-        setIsLoadingTypes(false);
-        return;
-      }
-      
-      console.log('[SearchPage] Tags data received:', tagsResponse.data?.length || 0, 'tags');
-      
-      if (tagsResponse.data) {
-        const mappedTags: SearchTag[] = tagsResponse.data
-          .filter((t: any) => t.category?.toUpperCase() === 'THEME' || t.category === 'Theme')
-          .map((t: any) => ({
-            id: t.id,
-            name: t.name,
-            nameHe: t.name_he || t.nameHe || t.name,
-            category: 'Theme'
-          }));
-        setThemeTags(mappedTags);
-        setIsColdStart(false); // Clear cold start on success
-        setRetryAttempt(0);
-      } else {
-        console.error('[SearchPage] No tags in response. Response data:', tagsResponse.data);
-        setTypesError(true);
-      }
-    } catch (error: any) {
-      console.error('[SearchPage] Failed to fetch types/tags from API:', error);
-      console.error('[SearchPage] Error details:', {
-        name: error?.name,
-        message: error?.message,
-        type: error?.constructor?.name
-      });
-      
-      setTypesError(true);
-      setIsLoadingTypes(false);
-    }
-  }, [retryAttempt]);
-
-
-  // Fetch data on mount
-  useEffect(() => {
-    fetchCountries();
-  }, [fetchCountries]);
-
-  useEffect(() => {
-    fetchTypesAndTags();
-  }, [fetchTypesAndTags]);
-  
-  // Retry all data
-  const retryFetchData = () => {
-    fetchCountries();
-    fetchTypesAndTags();
-  };
+  // DataStore handles all fetching automatically on mount
+  // No need for manual fetch calls or useEffect hooks
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -964,7 +604,7 @@ function SearchPageContent() {
             <p>נסה לרענן את הדף בעוד כמה רגעים</p>
           </div>
           <button
-            onClick={retryFetchData}
+            onClick={() => refreshAll()}
             className="w-full px-6 py-3 bg-[#076839] hover:bg-[#0ba55c] text-white rounded-xl font-medium transition-all"
           >
             נסה שוב עכשיו
@@ -976,32 +616,11 @@ function SearchPageContent() {
 
   return (
     <div className="min-h-screen bg-white">
-      {/* Logout Confirmation Dialog */}
-      {showLogoutConfirm && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-2xl shadow-2xl p-6 md:p-8 max-w-md w-full mx-4">
-            <h3 className="text-xl md:text-2xl font-bold text-gray-800 mb-4 text-center">
-              האם ברצונך להתנתק מהמערכת?
-            </h3>
-            <div className="flex gap-4 justify-center">
-              <button
-                onClick={confirmLogout}
-                className="px-6 py-3 bg-[#076839] text-white rounded-lg font-semibold hover:bg-[#065a2e] transition-colors"
-                type="button"
-              >
-                כן
-              </button>
-              <button
-                onClick={cancelLogout}
-                className="px-6 py-3 bg-gray-200 text-gray-800 rounded-lg font-semibold hover:bg-gray-300 transition-colors"
-                type="button"
-              >
-                לא
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <LogoutConfirmModal
+        isOpen={showLogoutConfirm}
+        onConfirm={confirmLogout}
+        onCancel={cancelLogout}
+      />
 
       {/* Header */}
       <header className="bg-[#076839] text-white py-4 md:py-6 shadow-lg">

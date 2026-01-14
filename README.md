@@ -218,21 +218,47 @@ trip-recommendations/
 │   ├── src/
 │   │   ├── app/                # Next.js App Router pages
 │   │   │   ├── auth/           # Authentication pages
+│   │   │   │   └── callback/   # Auth callback handler
 │   │   │   ├── search/         # Search UI
-│   │   │   └── trip/[id]/      # Trip detail page
+│   │   │   │   └── results/    # Search results page
+│   │   │   ├── trip/[id]/      # Trip detail page
+│   │   │   ├── error.tsx       # Error page
+│   │   │   ├── not-found.tsx   # 404 page
+│   │   │   ├── layout.tsx      # Root layout
+│   │   │   └── page.tsx        # Home page
 │   │   ├── components/         # React components
+│   │   │   ├── features/       # Feature components
+│   │   │   └── ui/             # UI components
 │   │   ├── hooks/              # Custom React hooks
+│   │   │   └── useTracking.ts  # Tracking hook
 │   │   ├── lib/                # Client-side libraries
+│   │   │   ├── dataStore.tsx   # Data store context
+│   │   │   └── supabaseClient.ts  # Supabase client
 │   │   └── services/           # API and tracking services
+│   │       ├── api.service.ts  # API client
+│   │       └── tracking.service.ts  # Tracking service
 │   ├── public/                 # Static assets
+│   │   ├── images/             # Image assets
+│   │   │   ├── continents/     # Continent images
+│   │   │   ├── logo/           # Logo images
+│   │   │   └── trip status/    # Trip status icons
+│   │   └── *.svg               # SVG icons
 │   ├── .env.local             # Frontend environment variables
+│   ├── CHECK_ENV.md           # Environment setup guide
+│   ├── eslint.config.mjs      # ESLint configuration
 │   ├── next.config.js         # Next.js configuration
-│   └── package.json          # Frontend dependencies
+│   ├── package.json           # Frontend dependencies
+│   ├── postcss.config.mjs     # PostCSS configuration
+│   ├── tailwind.config.ts     # Tailwind CSS configuration
+│   └── tsconfig.json          # TypeScript configuration
 │
 ├── backend/                    # Flask backend application
 │   ├── app/                    # Main application package
 │   │   ├── api/                # API routes
+│   │   │   ├── analytics/      # Analytics endpoints
 │   │   │   ├── events/         # Event tracking endpoints
+│   │   │   ├── resources/      # Resource endpoints
+│   │   │   ├── system/         # System endpoints
 │   │   │   └── v2/             # API V2 endpoints
 │   │   ├── core/               # Core functionality
 │   │   │   ├── auth.py         # Authentication middleware
@@ -250,19 +276,29 @@ trip-recommendations/
 │   │   ├── logging.py          # Request logging
 │   │   ├── metrics.py          # Performance metrics
 │   │   └── evaluation.py       # Quality evaluation
+│   ├── scenarios/              # Test scenarios and personas
+│   │   └── generated_personas.json  # Generated persona data
 │   ├── scripts/                # Development utilities
+│   │   ├── _archive/           # Archived scripts
 │   │   ├── analytics/          # Analytics scripts
-│   │   ├── db/                 # Database scripts
-│   │   └── data_gen/           # Data generation scripts
+│   │   ├── data_gen/           # Data generation scripts
+│   │   └── db/                 # Database scripts
 │   ├── .env                   # Backend environment variables
+│   ├── .gitignore             # Backend gitignore
 │   ├── Procfile               # Production process file
-│   └── requirements.txt       # Python dependencies
+│   ├── requirements.txt       # Python dependencies
+│   ├── requirements-dev.txt   # Development dependencies
+│   └── runtime.txt            # Python runtime version
 │
 ├── docs/                      # Documentation
 ├── .github/                   # GitHub configuration
-│   └── workflows/             # CI/CD workflows (future)
-├── vercel.json                # Vercel deployment config
-└── render.yaml                # Render deployment config
+│   └── workflows/             # CI/CD workflows
+│       └── README.md          # Workflows documentation
+├── .gitignore                 # Root gitignore
+├── Procfile                   # Root Procfile
+├── README.md                  # This file
+├── render.yaml                # Render deployment config
+└── vercel.json                # Vercel deployment config
 ```
 
 ---
@@ -428,11 +464,7 @@ The backend will automatically initialize the database schema on first deploymen
 - Same format as local development
 
 **Important:** 
-- Always use port **5432** (Session pooler), not 6543 (Transaction pooler)
-- Always include `?sslmode=require` at the end
 - Get the connection string from Supabase Dashboard → Settings → Database → Connection string → **URI** tab
-
-See `docs/DATABASE_CONNECTION_GUIDE.md` and `docs/SUPABASE_CONNECTION_STRING_CHOICE.md` for detailed information.
 
 ---
 

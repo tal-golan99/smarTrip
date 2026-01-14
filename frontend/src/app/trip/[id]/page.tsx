@@ -15,101 +15,17 @@ import {
   trackSaveTrip,
 } from '@/hooks/useTracking';
 import type { Trip } from '@/services/api.service';
-
-// API URL from environment variable
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
-
-// Helper to get trip field with both snake_case and camelCase support
-const getTripField = (trip: Trip, snakeCase: string, camelCase: string): any => {
-  return (trip as any)[snakeCase] || (trip as any)[camelCase];
-};
-
-
-// Format date to DD.MM.YYYY
-const formatDate = (dateString?: string): string => {
-  if (!dateString) return '';
-  return new Date(dateString).toLocaleDateString('en-GB').replace(/\//g, '.');
-};
-
-// Calculate duration in days
-const calculateDuration = (startDate?: string, endDate?: string): number => {
-  if (!startDate || !endDate) return 0;
-  const start = new Date(startDate);
-  const end = new Date(endDate);
-  const diffTime = Math.abs(end.getTime() - start.getTime());
-  return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-};
-
-// Get difficulty label in Hebrew
-const getDifficultyLabel = (level?: number): string => {
-  switch (level) {
-    case 1: return 'קל';
-    case 2: return 'בינוני';
-    case 3: return 'מאתגר';
-    default: return 'בינוני';
-  }
-};
-
-// Status translation to Hebrew
-const getStatusLabel = (status?: string): string => {
-  const statusMap: Record<string, string> = {
-    'GUARANTEED': 'יציאה מובטחת',
-    'LAST_PLACES': 'מקומות אחרונים',
-    'OPEN': 'הרשמה פתוחה',
-    'FULL': 'מלא',
-    'CANCELLED': 'בוטל',
-  };
-  // Normalize status: uppercase and replace spaces with underscores
-  const statusNormalized = status?.toUpperCase().replace(/\s+/g, '_');
-  return statusNormalized ? statusMap[statusNormalized] || 'הרשמה פתוחה' : 'הרשמה פתוחה';
-};
+import { getTrip } from '@/services/api.service';
+import {
+  getTripField,
+  formatDate,
+  calculateDuration,
+  getDifficultyLabel,
+  getStatusLabel,
+} from '@/lib/utils';
+import { RegistrationModal } from '@/components/features/RegistrationModal';
 
 // Modal Component
-function RegistrationModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
-  if (!isOpen) return null;
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      {/* Backdrop */}
-      <div 
-        className="absolute inset-0 bg-black/60 backdrop-blur-sm"
-        onClick={onClose}
-      />
-      
-      {/* Modal Content */}
-      <div className="relative bg-white rounded-2xl shadow-2xl p-8 max-w-md mx-4 text-center transform animate-in zoom-in-95 duration-200">
-        {/* Close button */}
-        <button
-          onClick={onClose}
-          className="absolute top-4 left-4 p-2 rounded-full hover:bg-gray-100 transition-colors"
-        >
-          <X className="w-5 h-5 text-gray-500" />
-        </button>
-        
-        {/* Icon */}
-        <div className="w-16 h-16 mx-auto mb-6 rounded-full bg-[#12acbe]/10 flex items-center justify-center">
-          <Calendar className="w-8 h-8 text-[#12acbe]" />
-        </div>
-        
-        {/* Message */}
-        <h3 className="text-2xl font-bold text-[#076839] mb-4">
-          שים לב
-        </h3>
-        <p className="text-lg text-[#5a5a5a] mb-8">
-          פעולה זו עדיין אינה פעילה
-        </p>
-        
-        {/* Close Button */}
-        <button
-          onClick={onClose}
-          className="px-8 py-3 bg-[#076839] text-white rounded-xl font-bold text-lg hover:bg-[#0ba55c] transition-all shadow-lg"
-        >
-          חזור
-        </button>
-      </div>
-    </div>
-  );
-}
 
 export default function TripPage() {
   const router = useRouter();
@@ -147,28 +63,16 @@ export default function TripPage() {
       setError(null);
 
       try {
-        // V2 API: Uses templates + occurrences schema
-        console.log('Fetching trip:', `${API_URL}/api/v2/trips/${tripId}`);
+        const response = await getTrip(tripIdNum);
         
-        const response = await fetch(`${API_URL}/api/v2/trips/${tripId}`);
-        
-        if (!response.ok) {
-          if (response.status === 404) {
+        if (!response.success || !response.data) {
+          if (response.error?.includes('404') || response.error?.includes('not found')) {
             throw new Error('הטיול לא נמצא');
           }
-          throw new Error('שגיאה בטעינת פרטי הטיול');
+          throw new Error(response.error || 'שגיאה בטעינת פרטי הטיול');
         }
 
-        const data = await response.json();
-        console.log('Trip data:', data);
-        
-        if (data.success && data.data) {
-          setTrip(data.data);
-          
-          // Prefetch country image for better performance
-        } else {
-          throw new Error('שגיאה בטעינת פרטי הטיול');
-        }
+        setTrip(response.data);
       } catch (err) {
         console.error('Error fetching trip:', err);
         setError(err instanceof Error ? err.message : 'שגיאה בטעינת פרטי הטיול');
@@ -178,7 +82,7 @@ export default function TripPage() {
     };
 
     fetchTrip();
-  }, [tripId]);
+  }, [tripId, tripIdNum]);
 
   const handleBack = () => {
     router.back();

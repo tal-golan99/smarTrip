@@ -1,74 +1,18 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
 import { Sparkles, Star, Users, Globe, CheckCircle, MapPin, Sliders, Ship, Train, Camera, Mountain, PawPrint, Users2, Drama, LogOut } from 'lucide-react';
-import { getCurrentUser, supabase, isAuthAvailable } from '@/lib/supabaseClient';
+import { supabase, isAuthAvailable } from '@/lib/supabaseClient';
+import { useUser } from '@/hooks/useUser';
+import { LogoutConfirmModal } from '@/components/features/LogoutConfirmModal';
 
 export default function Home() {
   const router = useRouter();
-  const [userName, setUserName] = useState<string | null>(null);
-  const [isLoadingUser, setIsLoadingUser] = useState(true);
+  const { userName, isLoading: isLoadingUser } = useUser();
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
-
-  // Load user name on mount
-  useEffect(() => {
-    const loadUser = async () => {
-      if (!isAuthAvailable() || !supabase) {
-        setIsLoadingUser(false);
-        return;
-      }
-      
-      try {
-        const user = await getCurrentUser();
-        if (user) {
-          const metadata = user.user_metadata || {};
-          let fullName = null;
-          if (metadata.full_name) {
-            fullName = metadata.full_name;
-          } else if (metadata.name) {
-            fullName = metadata.name;
-          } else if (metadata.first_name && metadata.last_name) {
-            fullName = `${metadata.first_name} ${metadata.last_name}`;
-          } else if (metadata.first_name) {
-            fullName = metadata.first_name;
-          } else if (metadata.last_name) {
-            fullName = metadata.last_name;
-          } else if (user.email) {
-            fullName = user.email.split('@')[0];
-          }
-          setUserName(fullName);
-        } else {
-          setUserName(null);
-        }
-      } catch (error) {
-        console.error('[Home] Error loading user:', error);
-        setUserName(null);
-      } finally {
-        setIsLoadingUser(false);
-      }
-    };
-    
-    loadUser();
-    
-    // Listen for auth state changes
-    if (supabase) {
-      const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-        if (session?.user) {
-          loadUser();
-        } else {
-          setUserName(null);
-          setIsLoadingUser(false);
-        }
-      });
-      
-      return () => {
-        subscription.unsubscribe();
-      };
-    }
-  }, []);
 
   // Show logout confirmation dialog
   const handleLogout = () => {
@@ -83,7 +27,6 @@ export default function Home() {
     
     try {
       await supabase.auth.signOut();
-      setUserName(null);
       setShowLogoutConfirm(false);
       router.push('/auth?redirect=/search');
     } catch (error) {
@@ -122,31 +65,11 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#076839] via-[#0ba55c] to-[#12acbe] flex items-center justify-center px-4 py-8 md:p-4 relative overflow-hidden">
       {/* Logout Confirmation Dialog */}
-      {showLogoutConfirm && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-2xl shadow-2xl p-6 md:p-8 max-w-md w-full mx-4">
-            <h3 className="text-xl md:text-2xl font-bold text-gray-800 mb-4 text-center">
-              האם ברצונך להתנתק מהמערכת?
-            </h3>
-            <div className="flex gap-4 justify-center">
-              <button
-                onClick={confirmLogout}
-                className="px-6 py-3 bg-[#076839] text-white rounded-lg font-semibold hover:bg-[#065a2e] transition-colors"
-                type="button"
-              >
-                כן
-              </button>
-              <button
-                onClick={cancelLogout}
-                className="px-6 py-3 bg-gray-200 text-gray-800 rounded-lg font-semibold hover:bg-gray-300 transition-colors"
-                type="button"
-              >
-                לא
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <LogoutConfirmModal
+        isOpen={showLogoutConfirm}
+        onConfirm={confirmLogout}
+        onCancel={cancelLogout}
+      />
 
       {/* Logout Button - Top Right */}
       {isAuthAvailable() && userName && (

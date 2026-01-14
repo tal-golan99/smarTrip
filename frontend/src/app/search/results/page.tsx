@@ -3,7 +3,7 @@
 import React, { useState, useEffect, Suspense, useRef, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Image from 'next/image';
-import { ArrowRight, Loader2, CheckCircle, AlertCircle, Clock, XCircle } from 'lucide-react';
+import { ArrowRight, Loader2 } from 'lucide-react';
 import clsx from 'clsx';
 
 // Phase 1: Tracking imports
@@ -16,10 +16,8 @@ import {
   ClickSource,
 } from '@/hooks/useTracking';
 import { trackEvent } from '@/services/tracking.service';
-import type { Trip, Country, Guide } from '@/services/api.service';
-
-// API URL from environment variable (set in Vercel)
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+import type { Trip, Country, Guide, RecommendedTrip } from '@/services/api.service';
+import { getRecommendations } from '@/services/api.service';
 
 interface SearchResult {
   trip: Trip;
@@ -28,125 +26,23 @@ interface SearchResult {
   guide?: Guide;
 }
 
-interface ScoreThresholds {
-  HIGH: number;
-  MID: number;
-}
-
-// Score color coding helper
-const getScoreColor = (score: number, thresholds: ScoreThresholds): 'high' | 'mid' | 'low' => {
-  if (score >= thresholds.HIGH) return 'high';
-  if (score >= thresholds.MID) return 'mid';
-  return 'low';
-};
-
-const getScoreBgClass = (colorLevel: 'high' | 'mid' | 'low'): string => {
-  switch (colorLevel) {
-    case 'high':
-      return 'bg-[#12acbe]';  // Turquoise - excellent
-    case 'mid':
-      return 'bg-[#f59e0b]';  // Orange - medium
-    case 'low':
-      return 'bg-[#ef4444]';  // Red - low
-  }
-};
-
-// Status translation to Hebrew
-const getStatusLabel = (status?: string): string => {
-  const statusMap: Record<string, string> = {
-    'GUARANTEED': 'יציאה מובטחת',
-    'LAST_PLACES': 'מקומות אחרונים',
-    'OPEN': 'הרשמה פתוחה',
-    'FULL': 'מלא',
-    'CANCELLED': 'בוטל',
-  };
-  // Normalize status: uppercase and replace spaces with underscores
-  const statusNormalized = status?.toUpperCase().replace(/\s+/g, '_');
-  return statusNormalized ? statusMap[statusNormalized] || 'הרשמה פתוחה' : 'הרשמה פתוחה';
-};
-
-// Status icon mapping - using image files
-const getStatusIconUrl = (status?: string): string | null => {
-  // Normalize status: uppercase and replace spaces with underscores
-  const statusNormalized = status?.toUpperCase().replace(/\s+/g, '_');
-  switch (statusNormalized) {
-    case 'GUARANTEED':
-      return '/images/trip status/guaranteed.svg';
-    case 'LAST_PLACES':
-      return '/images/trip status/last places.svg';
-    case 'OPEN':
-      return '/images/trip status/open.svg';
-    case 'FULL':
-      return '/images/trip status/full.png';
-    default:
-      return null;
-  }
-};
-
-// Fallback icon mapping (Lucide icons as backup)
-const getStatusIcon = (status?: string) => {
-  // Normalize status: uppercase and replace spaces with underscores
-  const statusNormalized = status?.toUpperCase().replace(/\s+/g, '_');
-  switch (statusNormalized) {
-    case 'GUARANTEED':
-      return CheckCircle;
-    case 'LAST_PLACES':
-      return AlertCircle;
-    case 'OPEN':
-      return Clock;
-    case 'FULL':
-      return XCircle;
-    default:
-      return Clock;
-  }
-};
+import {
+  getScoreColor,
+  getScoreBgClass,
+  getStatusLabel,
+  getStatusIconUrl,
+  getStatusIcon,
+  getTripField,
+  type ScoreThresholds,
+} from '@/lib/utils';
+import { TripResultCard } from '@/components/features/TripResultCard';
 
 
 // ============================================
 // TRIP RESULT CARD (Phase 1: With Impression Tracking)
 // ============================================
 
-interface TripResultCardProps {
-  tripId: number | undefined;
-  position: number;
-  score: number;
-  source: ClickSource;
-  onClick: () => void;
-  className?: string;
-  children: React.ReactNode;
-}
 
-/**
- * Trip result card wrapper with impression tracking.
- * Fires impression event when card is 50% visible.
- */
-function TripResultCard({
-  tripId,
-  position,
-  score,
-  source,
-  onClick,
-  className,
-  children,
-}: TripResultCardProps) {
-  // Phase 1: Track impression when card enters viewport
-  const impressionRef = useImpressionTracking(tripId, position, score, source);
-  
-  return (
-    <div
-      ref={impressionRef}
-      onClick={onClick}
-      className={className}
-    >
-      {children}
-    </div>
-  );
-}
-
-// Helper to get trip field with both snake_case and camelCase support
-const getTripField = (trip: Trip, snakeCase: string, camelCase: string): any => {
-  return (trip as any)[snakeCase] || (trip as any)[camelCase];
-};
 
 // ============================================
 // SCROLL DEPTH TRACKING HOOK (Phase 1)
@@ -255,9 +151,6 @@ function SearchResultsPageContent() {
 
   useEffect(() => {
     const fetchResults = async () => {
-      setIsLoading(true);
-      setError(null);
-
       // Build preferences from URL params
       const countries = searchParams.get('countries')?.split(',').map(Number).filter(Boolean) || [];
       const continents = searchParams.get('continents')?.split(',').filter(Boolean) || [];
@@ -284,69 +177,137 @@ function SearchResultsPageContent() {
         month: month || 'all',
       };
 
-      // Log the API URL being used (for debugging)
-      console.log('Fetching recommendations from:', `${API_URL}/api/v2/recommendations`);
-      console.log('Request preferences:', preferences);
+      // Create cache key from search params
+      const cacheKey = `search_results_${searchParams.toString()}`;
+      
+      // Check cache first
+      try {
+        const cached = sessionStorage.getItem(cacheKey);
+        if (cached) {
+          const cachedData = JSON.parse(cached);
+          const cacheAge = Date.now() - cachedData.timestamp;
+          const CACHE_MAX_AGE = 5 * 60 * 1000; // 5 minutes
+          
+          if (cacheAge < CACHE_MAX_AGE) {
+            // Use cached data immediately
+            console.log('[Results] Using cached data');
+            setResults(cachedData.results);
+            setTotalTrips(cachedData.totalTrips);
+            setPrimaryCount(cachedData.primaryCount);
+            setRelaxedCount(cachedData.relaxedCount);
+            setHasRelaxedResults(cachedData.hasRelaxedResults);
+            setScoreThresholds(cachedData.scoreThresholds);
+            setShowRefinementMessage(cachedData.showRefinementMessage);
+            setResponseTimeMs(cachedData.responseTimeMs);
+            if (cachedData.requestId) {
+              setRequestId(cachedData.requestId);
+            }
+            setIsLoading(false);
+            setError(null);
+            return;
+          } else {
+            // Cache expired, remove it
+            sessionStorage.removeItem(cacheKey);
+          }
+        }
+      } catch (e) {
+        console.warn('[Results] Cache read error:', e);
+      }
+
+      // No cache or expired - fetch from API
+      await fetchResultsFromAPI(preferences, cacheKey, true);
+    };
+
+    const fetchResultsFromAPI = async (preferences: any, cacheKey: string, showLoading: boolean) => {
+      if (showLoading) {
+        setIsLoading(true);
+      }
+      setError(null);
+
+      // Log the request preferences (for debugging)
+      console.log('Fetching recommendations with preferences:', preferences);
 
       // Phase 1: Track response time
       const startTime = Date.now();
 
-      // Add timeout to prevent hanging (30 seconds max)
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 30000);
-
       try {
-        const response = await fetch(`${API_URL}/api/v2/recommendations`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(preferences),
-          signal: controller.signal,
-        });
-        
-        clearTimeout(timeoutId);
+        // Use centralized API service function
+        // apiFetch returns the raw response, preserving all metadata fields
+        const response = await getRecommendations(preferences) as any;
 
         // Phase 1: Calculate response time
         const endTime = Date.now();
-        setResponseTimeMs(endTime - startTime);
+        const responseTime = endTime - startTime;
+        setResponseTimeMs(responseTime);
 
-        console.log('Response status:', response.status, response.ok);
+        console.log('API response:', { 
+          success: response.success, 
+          count: response.count, 
+          totalTrips: response.total_trips,
+          resultsLength: response.data?.length 
+        });
 
-        if (!response.ok) {
-          const errorText = await response.text();
-          console.error('API error response:', response.status, errorText);
-          throw new Error(`Failed to fetch recommendations: ${response.status}`);
+        if (!response.success) {
+          console.error('API error:', response.error);
+          // Handle timeout errors specifically
+          if (response.error?.includes('timeout') || response.error?.includes('taking too long')) {
+            setError('הבקשה ארכה יותר מדי זמן. אנא נסה שוב או נסה עם פחות מסננים.');
+          } else {
+            setError(response.error || 'שגיאה בטעינת התוצאות. אנא נסה שוב.');
+          }
+          setIsLoading(false);
+          return;
         }
 
-        const data = await response.json();
-        console.log('API response data:', { success: data.success, count: data.count, totalTrips: data.total_trips, resultsLength: data.data?.length });
+        // Convert RecommendedTrip[] to SearchResult[] format
+        // response.data contains the trips array with match_score and match_details
+        const searchResults: SearchResult[] = (response.data || []).map((trip: RecommendedTrip) => ({
+          trip: trip as Trip,
+          match_score: trip.match_score,
+          match_details: trip.match_details || [],
+          guide: (trip as any).guide,
+        }));
         
-        setResults(data.data || []);
-        setTotalTrips(data.total_trips || 0);
-        setPrimaryCount(data.primary_count || data.count || 0);
-        setRelaxedCount(data.relaxed_count || 0);
-        setHasRelaxedResults(data.has_relaxed_results || false);
+        setResults(searchResults);
+        setTotalTrips(response.total_trips || 0);
+        setPrimaryCount(response.primary_count || response.count || 0);
+        setRelaxedCount(response.relaxed_count || 0);
+        setHasRelaxedResults(response.has_relaxed_results || false);
         
         // Phase 1: Store request ID for event correlation
-        if (data.request_id) {
-          setRequestId(data.request_id);
+        if (response.request_id) {
+          setRequestId(response.request_id);
         }
         
         // Get score thresholds and refinement message flag from API
-        if (data.score_thresholds) {
-          setScoreThresholds(data.score_thresholds);
+        const thresholds = response.score_thresholds || { HIGH: 70, MID: 50 };
+        setScoreThresholds(thresholds);
+        setShowRefinementMessage(response.show_refinement_message || false);
+        
+        // Cache the results
+        try {
+          sessionStorage.setItem(cacheKey, JSON.stringify({
+            results: searchResults,
+            totalTrips: response.total_trips || 0,
+            primaryCount: response.primary_count || response.count || 0,
+            relaxedCount: response.relaxed_count || 0,
+            hasRelaxedResults: response.has_relaxed_results || false,
+            scoreThresholds: thresholds,
+            showRefinementMessage: response.show_refinement_message || false,
+            responseTimeMs: responseTime,
+            requestId: response.request_id,
+            timestamp: Date.now(),
+          }));
+        } catch (e) {
+          console.warn('[Results] Cache write error:', e);
         }
-        setShowRefinementMessage(data.show_refinement_message || false);
         
       } catch (fetchErr: any) {
-        clearTimeout(timeoutId);
-        if (fetchErr.name === 'AbortError') {
-          console.error('Search request timed out after 30 seconds');
+        console.error('Search failed:', fetchErr);
+        // Handle timeout errors
+        if (fetchErr.name === 'AbortError' || fetchErr.message?.includes('timeout')) {
           setError('הבקשה ארכה יותר מדי זמן. אנא נסה שוב או נסה עם פחות מסננים.');
         } else {
-          console.error('Search failed:', fetchErr);
-          console.error('Attempted to fetch from:', `${API_URL}/api/v2/recommendations`);
           setError('שגיאה בטעינת התוצאות. אנא נסה שוב.');
         }
       } finally {
