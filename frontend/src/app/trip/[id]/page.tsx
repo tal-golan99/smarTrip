@@ -31,9 +31,10 @@ export default function TripPage() {
   const router = useRouter();
   const params = useParams();
   const tripId = params.id as string;
-  let tripIdNum;
+  let tripIdNum: number | undefined;
   if (tripId) {
-    tripIdNum = parseInt(tripId, 10);
+    const parsed = parseInt(tripId, 10);
+    tripIdNum = isNaN(parsed) ? undefined : parsed;
   } else {
     tripIdNum = undefined;
   }
@@ -57,7 +58,7 @@ export default function TripPage() {
   // Fetch trip data
   useEffect(() => {
     const fetchTrip = async () => {
-      if (!tripId) return;
+      if (!tripId || !tripIdNum) return;
       
       setIsLoading(true);
       setError(null);
