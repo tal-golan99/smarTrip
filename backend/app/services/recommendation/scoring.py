@@ -3,7 +3,7 @@ Scoring Functions for Trip Recommendations
 """
 
 from datetime import date
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional, Any, Callable
 import heapq
 
 from app.models.trip import TripOccurrence
@@ -281,6 +281,79 @@ def calculate_relaxed_trip_score(
         return None
 
 
+def _score_with_min_heap(
+    candidates: List[TripOccurrence],
+    score_func: Callable,
+    max_heap_size: int,
+    extract_count: int
+) -> List[Dict[str, Any]]:
+    """
+    Shared min-heap algorithm for scoring trips.
+    
+    Uses a min-heap optimization to keep only the top max_heap_size trips during
+    scoring, then extracts the top extract_count results. This significantly improves
+    performance when there are many candidates.
+    
+    The heap stores (-score, sort_date, trip_id, trip_dict) tuples where:
+    - -score: negated float score (smaller = higher original score)
+    - sort_date: ISO date string for tiebreaking
+    - trip_id: trip ID for final tiebreaking
+    - trip_dict: the scored trip dictionary
+    
+    Args:
+        candidates: List of TripOccurrence objects to score
+        score_func: Function to score a single TripOccurrence (returns dict or None)
+        max_heap_size: Maximum number of trips to keep in heap
+        extract_count: Number of top results to extract from heap
+    
+    Returns:
+        List of scored trip dicts (up to extract_count, sorted by score descending)
+    """
+    heap = []
+    
+    for occ in candidates:
+        scored_trip = score_func(occ)
+        
+        if not scored_trip:  # Skip if None (filtered out)
+            continue
+        
+        score = scored_trip['_float_score']
+        sort_date = scored_trip['_sort_date']
+        trip_id = scored_trip.get('id', 0)  # Use trip ID as tiebreaker to avoid dict comparison
+        
+        # Use negated score so min-heap keeps highest scores
+        # Tuple: (-score, sort_date, trip_id, trip_dict)
+        # When scores equal, earlier dates (smaller strings) come first
+        # trip_id ensures we never compare dictionaries (all IDs are unique)
+        heap_item = (-score, sort_date, trip_id, scored_trip)
+        
+        if len(heap) < max_heap_size:
+            # Heap not full yet, just add it
+            heapq.heappush(heap, heap_item)
+        else:
+            # Heap is full, check if this trip is better than the worst one
+            # Worst item has smallest -score (i.e., highest score), so we compare with heap[0]
+            worst_item = heap[0]
+            worst_negated_score = worst_item[0]
+            if -score < worst_negated_score:  # score > worst_score (since both negated)
+                # Replace worst trip with this better one
+                heapq.heapreplace(heap, heap_item)
+    
+    # Extract top results from min-heap
+    # Min-heap with negated scores: smallest negated_score = highest original_score
+    # To get highest scores first, we need the smallest negated scores
+    # Use nsmallest to get the smallest values (which are the highest original scores)
+    # nsmallest returns items sorted by tuple comparison: (-score, sort_date, trip_id)
+    # This means highest scores first, then earliest dates, which is exactly what we want
+    top_items = heapq.nsmallest(extract_count, heap)
+    
+    # Extract trip dicts (already in correct order from nsmallest)
+    # Format: (negated_score, sort_date, trip_id, trip_dict)
+    scored_trips = [trip for _, _, _, trip in top_items]
+    
+    return scored_trips
+
+
 def score_candidates(
     candidates: List[TripOccurrence],
     preferences: Dict[str, Any],
@@ -297,11 +370,6 @@ def score_candidates(
     only need a small subset. This significantly improves performance when
     there are many candidates.
     
-    The heap stores (score, date, trip_dict) tuples where:
-    - score: float score (lower is worse, kept at top of min-heap)
-    - date: sort date string for tiebreaking
-    - trip_dict: the scored trip dictionary
-    
     Args:
         candidates: List of TripOccurrence objects to score
         preferences: Normalized preferences dict
@@ -317,58 +385,10 @@ def score_candidates(
     private_groups_id = context['private_groups_id']
     max_candidates = config.MAX_CANDIDATES_TO_SCORE
     
-    # Min-heap to keep only top N trips
-    # Store (-score, sort_date, trip_id, trip_dict) to use min-heap for max extraction
-    # Negated score: higher scores become smaller values (so they stay in heap)
-    # sort_date: earlier dates come first when scores are equal (ISO strings compare correctly)
-    heap = []
-    
-    for occ in candidates:
-        scored_trip = calculate_trip_score(
-            occ,
-            preferences,
-            weights,
-            config,
-            today,
-            private_groups_id,
-            format_trip_func
+    # Create a scoring function closure
+    def score_func(occ: TripOccurrence) -> Optional[Dict[str, Any]]:
+        return calculate_trip_score(
+            occ, preferences, weights, config, today, private_groups_id, format_trip_func
         )
-        
-        if not scored_trip:  # Skip if None (filtered out)
-            continue
-        
-        score = scored_trip['_float_score']
-        sort_date = scored_trip['_sort_date']
-        trip_id = scored_trip.get('id', 0)  # Use trip ID as tiebreaker to avoid dict comparison
-        
-        # Use negated score so min-heap keeps highest scores
-        # Tuple: (-score, sort_date, trip_id, trip_dict)
-        # When scores equal, earlier dates (smaller strings) come first
-        # trip_id ensures we never compare dictionaries (all IDs are unique)
-        heap_item = (-score, sort_date, trip_id, scored_trip)
-        
-        if len(heap) < max_candidates:
-            # Heap not full yet, just add it
-            heapq.heappush(heap, heap_item)
-        else:
-            # Heap is full, check if this trip is better than the worst one
-            # Worst item has smallest -score (i.e., highest score), so we compare with heap[0]
-            worst_item = heap[0]
-            worst_negated_score = worst_item[0]
-            if -score < worst_negated_score:  # score > worst_score (since both negated)
-                # Replace worst trip with this better one
-                heapq.heapreplace(heap, heap_item)
     
-    # Extract top results from min-heap
-    # Min-heap with negated scores: smallest negated_score = highest original_score
-    # To get highest scores first, we need the smallest negated scores
-    # Use nsmallest to get the smallest values (which are the highest original scores)
-    top_items = heapq.nsmallest(max_candidates, heap)
-    
-    # Extract trip dicts and sort by original score descending, then date ascending
-    # Format: (negated_score, sort_date, trip_id, trip_dict)
-    scored_trips = [trip for _, _, _, trip in top_items]
-    # Sort by original score (negate the negated score) descending, then date ascending
-    scored_trips.sort(key=lambda x: (-x['_float_score'], x['_sort_date']))
-    
-    return scored_trips
+    return _score_with_min_heap(candidates, score_func, max_candidates, max_candidates)

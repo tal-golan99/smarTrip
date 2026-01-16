@@ -64,7 +64,7 @@ class RecommendationConfig:
     RELAXED_DURATION_DAYS = 10          # Allow +/-10 days from range
     
     # Result limits
-    MAX_RESULTS = 10                # Return top 10 recommendations
+    MAX_RESULTS = 30                # Return top 30 recommendations
     MIN_RESULTS_THRESHOLD = 5       # If results <= this, add relaxed results
     MAX_CANDIDATES_TO_SCORE = 30   # Use min-heap to keep only top 30 during scoring
     THEME_MATCH_THRESHOLD = 2       # Need 2+ themes for full points

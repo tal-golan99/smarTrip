@@ -6,13 +6,12 @@ from datetime import datetime, timedelta, date
 from dateutil.relativedelta import relativedelta
 from sqlalchemy import or_, extract
 from typing import Dict, List, Optional, Tuple, Any
-import heapq
 
 from app.core.database import db_session
 from app.models.trip import TripTemplate, TripOccurrence, Country
 from .constants import RecommendationConfig
 from .filters import build_base_query, apply_difficulty_filter, apply_budget_filter
-from .scoring import calculate_relaxed_trip_score
+from .scoring import calculate_relaxed_trip_score, _score_with_min_heap
 
 
 def build_relaxed_query(
@@ -235,50 +234,18 @@ def execute_relaxed_search(
     relaxed_candidates = relaxed_query.all()
     print(f"[Recommendation RELAXED] Loaded {len(relaxed_candidates)} relaxed candidates for scoring", flush=True)
     
-    # Score relaxed trips using min-heap (only keep top needed_count + buffer)
+    # Score relaxed trips using shared min-heap algorithm
     # We need at least needed_count, but keep a few extra in case some are filtered
     max_relaxed = min(needed_count + 10, config.MAX_CANDIDATES_TO_SCORE)
-    heap = []
     
-    for occ in relaxed_candidates:
-        scored_trip = calculate_relaxed_trip_score(
-            occ,
-            preferences,
-            weights,
-            config,
-            today,
-            private_groups_id,
-            format_trip_func
+    # Create a scoring function closure
+    def score_func(occ: TripOccurrence):
+        return calculate_relaxed_trip_score(
+            occ, preferences, weights, config, today, private_groups_id, format_trip_func
         )
-        
-        if not scored_trip:
-            continue
-        
-        score = scored_trip['_float_score']
-        sort_date = scored_trip['_sort_date']
-        trip_id = scored_trip.get('id', 0)  # Use trip ID as tiebreaker to avoid dict comparison
-        
-        # Use negated score for consistent tie-breaking (same as score_candidates)
-        # Tuple: (-score, sort_date, trip_id, trip_dict)
-        # trip_id ensures we never compare dictionaries (all IDs are unique)
-        heap_item = (-score, sort_date, trip_id, scored_trip)
-        
-        if len(heap) < max_relaxed:
-            heapq.heappush(heap, heap_item)
-        else:
-            worst_item = heap[0]
-            worst_negated_score = worst_item[0]
-            if -score < worst_negated_score:  # score > worst_score
-                heapq.heapreplace(heap, heap_item)
     
-    # Extract top results from min-heap (same logic as score_candidates)
-    top_items = heapq.nsmallest(needed_count, heap)
-    
-    # Extract trip dicts and sort by original score descending, then date ascending
-    # Format: (negated_score, sort_date, trip_id, trip_dict)
-    relaxed_scored = [trip for _, _, _, trip in top_items]
-    # Sort by original score (negate the negated score) descending, then date ascending
-    relaxed_scored.sort(key=lambda x: (-x['_float_score'], x['_sort_date']))
+    # Use shared min-heap algorithm (same as primary search)
+    relaxed_scored = _score_with_min_heap(relaxed_candidates, score_func, max_relaxed, needed_count)
     
     # Filter out trips with score below MIN_SCORE_THRESHOLD (same as primary search)
     filtered_relaxed = [
