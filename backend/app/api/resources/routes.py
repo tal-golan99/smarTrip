@@ -8,6 +8,8 @@ Read-only endpoints for countries, guides, trip types, tags, and locations.
 from flask import Blueprint, jsonify, request
 from app.core.database import db_session, is_database_error
 from app.models.trip import Country, Guide, TripType, Tag
+from app.schemas.resources import CountrySchema, GuideSchema, TripTypeSchema, TagSchema
+from app.schemas.utils import serialize_response
 
 resources_bp = Blueprint('resources', __name__)
 
@@ -66,16 +68,14 @@ def get_locations():
                 'nameHe': continent_names_he.get(c, c)
             })
         
-        # Convert countries with proper continent string conversion
-        countries_list = []
-        for c in countries:
-            continent_str = c.continent.name if hasattr(c.continent, 'name') else str(c.continent)
-            countries_list.append({
-                'id': c.id,
-                'name': c.name,
-                'name_he': c.name_he,
-                'continent': continent_display_names.get(continent_str, continent_str)
-            })
+        # Use Pydantic schema for countries (automatically converts to camelCase)
+        country_schemas = [CountrySchema.model_validate(c) for c in countries]
+        countries_list = [schema.model_dump(by_alias=True) for schema in country_schemas]
+        
+        # Add continent display name to each country
+        for i, country in enumerate(countries):
+            continent_str = country.continent.name if hasattr(country.continent, 'name') else str(country.continent)
+            countries_list[i]['continent'] = continent_display_names.get(continent_str, continent_str)
         
         print(f"[LOCATIONS] Returning {len(countries_list)} countries to frontend", flush=True)
         
@@ -123,11 +123,7 @@ def get_countries():
         
         countries = query.order_by(Country.name).all()
         
-        return jsonify({
-            'success': True,
-            'count': len(countries),
-            'data': [country.to_dict() for country in countries]
-        }), 200
+        return serialize_response(countries, CountrySchema, include_count=True)
     
     except Exception as e:
         return jsonify({
@@ -148,10 +144,7 @@ def get_country(country_id):
                 'error': 'Country not found'
             }), 404
         
-        return jsonify({
-            'success': True,
-            'data': country.to_dict()
-        }), 200
+        return serialize_response(country, CountrySchema)
     
     except Exception as e:
         is_db_error, is_conn_error = is_database_error(e)
@@ -179,11 +172,7 @@ def get_guides():
     try:
         guides = db_session.query(Guide).filter(Guide.is_active == True).order_by(Guide.name).all()
         
-        return jsonify({
-            'success': True,
-            'count': len(guides),
-            'data': [guide.to_dict() for guide in guides]
-        }), 200
+        return serialize_response(guides, GuideSchema, include_count=True)
     
     except Exception as e:
         is_db_error, is_conn_error = is_database_error(e)
@@ -217,10 +206,7 @@ def get_guide(guide_id):
                 'error': 'Guide not found'
             }), 404
         
-        return jsonify({
-            'success': True,
-            'data': guide.to_dict()
-        }), 200
+        return serialize_response(guide, GuideSchema)
     
     except Exception as e:
         is_db_error, is_conn_error = is_database_error(e)
@@ -255,11 +241,7 @@ def get_trip_types():
     try:
         trip_types = db_session.query(TripType).order_by(TripType.name).all()
         
-        return jsonify({
-            'success': True,
-            'count': len(trip_types),
-            'data': [trip_type.to_dict() for trip_type in trip_types]
-        }), 200
+        return serialize_response(trip_types, TripTypeSchema, include_count=True)
     
     except Exception as e:
         is_db_error, is_conn_error = is_database_error(e)
@@ -299,11 +281,7 @@ def get_tags():
         # All tags are now theme tags (category column dropped in V2 migration)
         tags = db_session.query(Tag).order_by(Tag.name).all()
         
-        return jsonify({
-            'success': True,
-            'count': len(tags),
-            'data': [tag.to_dict() for tag in tags]
-        }), 200
+        return serialize_response(tags, TagSchema, include_count=True)
     
     except Exception as e:
         is_db_error, is_conn_error = is_database_error(e)

@@ -257,7 +257,7 @@ export default function Home() {
 
         {/* Footer */}
         <div className="mt-12 md:mt-16 pt-6 md:pt-8 border-t border-white/20 text-center text-white/70 text-sm animate-fade-in-up px-4" style={{ animationDelay: '1.8s' }}>
-          <p className="mb-2">© 2025 SmarTrip. כל הזכויות שמורות.</p>
+          <p className="mb-2">© {new Date().getFullYear()} SmarTrip. כל הזכויות שמורות.</p>
           <p className="text-xs text-white/50">מערכת המלצות חכמה לטיולים מאורגנים</p>
         </div>
       </div>

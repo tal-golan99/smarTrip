@@ -21,6 +21,11 @@ from app.models.trip import (
     Company, TripTemplate, TripOccurrence, TripTemplateTag, TripTemplateCountry,
     Country, Guide, TripType, Tag, TripStatus, Continent
 )
+from app.schemas.trip import (
+    TripTemplateSchema, TripOccurrenceSchema
+)
+from app.schemas.resources import CompanySchema, CountrySchema, GuideSchema, TripTypeSchema, TagSchema
+from app.schemas.utils import serialize_response
 
 api_v2_bp = Blueprint('api_v2', __name__)
 
@@ -37,11 +42,7 @@ def get_companies():
             Company.is_active == True
         ).order_by(Company.name).all()
         
-        return jsonify({
-            'success': True,
-            'count': len(companies),
-            'data': [c.to_dict() for c in companies]
-        }), 200
+        return serialize_response(companies, CompanySchema, include_count=True)
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
@@ -57,9 +58,11 @@ def get_company(company_id):
         if not company:
             return jsonify({'success': False, 'error': 'Company not found'}), 404
         
-        data = company.to_dict()
+        # Use schema for serialization
+        schema = CompanySchema.model_validate(company)
+        data = schema.model_dump(by_alias=True)
         
-        # Include template count
+        # Include template count (computed field)
         template_count = db_session.query(TripTemplate).filter(
             TripTemplate.company_id == company_id,
             TripTemplate.is_active == True
@@ -117,26 +120,34 @@ def get_templates():
         limit = min(int(request.args.get('limit', 50)), 100)
         offset = int(request.args.get('offset', 0))
         
+        # Eagerly load all relationships to avoid N+1 queries
+        query = query.options(
+            selectinload(TripTemplate.template_tags).joinedload(TripTemplateTag.tag),
+            selectinload(TripTemplate.template_countries).joinedload(TripTemplateCountry.country),
+        )
+        
         templates = query.order_by(TripTemplate.title).offset(offset).limit(limit).all()
+        
+        # Use Pydantic schemas for serialization
+        schemas = [TripTemplateSchema.model_validate(t) for t in templates]
+        results = [schema.model_dump(by_alias=True) for schema in schemas]
         
         # Include occurrences if requested
         include_occurrences = request.args.get('include_occurrences', 'false').lower() == 'true'
-        
-        results = []
-        for template in templates:
-            data = template.to_dict(include_relations=True)
-            
-            if include_occurrences:
+        if include_occurrences:
+            for i, template in enumerate(templates):
                 # Get upcoming occurrences
-                occurrences = db_session.query(TripOccurrence).filter(
+                occurrences = db_session.query(TripOccurrence).options(
+                    joinedload(TripOccurrence.guide)
+                ).filter(
                     TripOccurrence.trip_template_id == template.id,
                     TripOccurrence.start_date >= datetime.now().date(),
                     TripOccurrence.status != 'Cancelled'
                 ).order_by(TripOccurrence.start_date).limit(5).all()
                 
-                data['upcomingOccurrences'] = [o.to_dict() for o in occurrences]
-            
-            results.append(data)
+                # Serialize occurrences
+                occurrence_schemas = [TripOccurrenceSchema.model_validate(o) for o in occurrences]
+                results[i]['upcomingOccurrences'] = [schema.model_dump(by_alias=True) for schema in occurrence_schemas]
         
         return jsonify({
             'success': True,
@@ -152,8 +163,15 @@ def get_templates():
 
 @api_v2_bp.route('/templates/<int:template_id>', methods=['GET'])
 def get_template(template_id):
-    """Get a specific trip template with all details"""
+    """
+    Get a specific trip template with all details.
+    
+    Uses Pydantic schema for serialization with automatic camelCase conversion.
+    All relationships are eagerly loaded to avoid N+1 queries.
+    """
     try:
+        # Eagerly load all relationships to avoid N+1 queries
+        # Pydantic will access these relationships, so they must be loaded
         template = db_session.query(TripTemplate).options(
             joinedload(TripTemplate.company),
             joinedload(TripTemplate.trip_type),
@@ -165,20 +183,9 @@ def get_template(template_id):
         if not template:
             return jsonify({'success': False, 'error': 'Template not found'}), 404
         
-        data = template.to_dict(include_relations=True)
-        
-        # Get all occurrences
-        occurrences = db_session.query(TripOccurrence).options(
-            joinedload(TripOccurrence.guide)
-        ).filter(
-            TripOccurrence.trip_template_id == template_id,
-            TripOccurrence.start_date >= datetime.now().date(),
-            TripOccurrence.status != 'Cancelled'
-        ).order_by(TripOccurrence.start_date).all()
-        
-        data['occurrences'] = [o.to_dict() for o in occurrences]
-        
-        return jsonify({'success': True, 'data': data}), 200
+        # Use Pydantic schema for serialization (automatically converts to camelCase)
+        # Note: Occurrences are handled separately if needed - not included in TripTemplateSchema
+        return serialize_response(template, TripTemplateSchema)
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
@@ -267,11 +274,23 @@ def get_occurrences():
         limit = min(int(request.args.get('limit', 50)), 100)
         offset = int(request.args.get('offset', 0))
         
+        # Eagerly load relationships to avoid N+1 queries
+        include_template = request.args.get('include_template', 'true').lower() == 'true'
+        if include_template:
+            query = query.options(
+                joinedload(TripOccurrence.template).joinedload(TripTemplate.company),
+                joinedload(TripOccurrence.template).joinedload(TripTemplate.trip_type),
+                joinedload(TripOccurrence.template).joinedload(TripTemplate.primary_country),
+                joinedload(TripOccurrence.template).selectinload(TripTemplate.template_tags).joinedload(TripTemplateTag.tag),
+                joinedload(TripOccurrence.template).selectinload(TripTemplate.template_countries).joinedload(TripTemplateCountry.country),
+            )
+        query = query.options(joinedload(TripOccurrence.guide))
+        
         occurrences = query.order_by(TripOccurrence.start_date).offset(offset).limit(limit).all()
         
-        # Format response
-        include_template = request.args.get('include_template', 'true').lower() == 'true'
-        results = [o.to_dict(include_template=include_template) for o in occurrences]
+        # Use Pydantic schemas for serialization
+        schemas = [TripOccurrenceSchema.model_validate(o) for o in occurrences]
+        results = [schema.model_dump(by_alias=True) for schema in schemas]
         
         return jsonify({
             'success': True,
@@ -300,25 +319,21 @@ def get_occurrence(occurrence_id):
         if not occurrence:
             return jsonify({'success': False, 'error': 'Occurrence not found'}), 404
         
-        return jsonify({
-            'success': True,
-            'data': occurrence.to_dict(include_template=True)
-        }), 200
+        # Use Pydantic schema for serialization
+        return serialize_response(occurrence, TripOccurrenceSchema)
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
 # ============================================
-# TRIPS API (Backward Compatible - Returns Occurrences as "Trips")
+# TRIPS API (Returns Occurrences)
 # ============================================
 
-@api_v2_bp.route('/trips', methods=['GET'])
-def get_trips_v2():
+@api_v2_bp.route('/trip-occurrences', methods=['GET'])
+def get_trip_occurrences():
     """
-    Backward-compatible trips endpoint.
-    Returns occurrences formatted like the old trips table.
-    
-    This allows frontend to migrate gradually without breaking changes.
+    Get trip occurrences endpoint.
+    Returns occurrences using TripOccurrenceSchema.
     """
     try:
         query = db_session.query(TripOccurrence).options(
@@ -378,19 +393,17 @@ def get_trips_v2():
         
         occurrences = query.order_by(TripOccurrence.start_date).all()
         
-        # Format as old-style trip objects
-        trips = []
-        for occ in occurrences:
-            trip_data = format_occurrence_as_trip(occ)
-            trips.append(trip_data)
+        # Use TripOccurrenceSchema directly
+        schemas = [TripOccurrenceSchema.model_validate(occ) for occ in occurrences]
+        results = [schema.model_dump(by_alias=True) for schema in schemas]
         
         return jsonify({
             'success': True,
-            'count': len(trips),
+            'count': len(results),
             'total': total,
             'offset': offset,
-            'limit': limit,
-            'data': trips
+            'limit': limit if limit else None,
+            'data': results
         }), 200
     except Exception as e:
         import traceback
@@ -398,111 +411,8 @@ def get_trips_v2():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
-@api_v2_bp.route('/trips/<int:trip_id>', methods=['GET'])
-def get_trip_v2(trip_id):
-    """
-    Get a specific trip by occurrence ID (backward compatible).
-    """
-    try:
-        occurrence = db_session.query(TripOccurrence).options(
-            joinedload(TripOccurrence.template).joinedload(TripTemplate.company),
-            joinedload(TripOccurrence.template).joinedload(TripTemplate.trip_type),
-            joinedload(TripOccurrence.template).joinedload(TripTemplate.primary_country),
-            joinedload(TripOccurrence.template).selectinload(TripTemplate.template_tags).joinedload(TripTemplateTag.tag),
-            joinedload(TripOccurrence.guide),
-        ).filter(TripOccurrence.id == trip_id).first()
-        
-        if not occurrence:
-            return jsonify({'success': False, 'error': 'Trip not found'}), 404
-        
-        trip_data = format_occurrence_as_trip(occurrence, include_relations=True)
-        
-        return jsonify({
-            'success': True,
-            'data': trip_data
-        }), 200
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
 
 
-def format_occurrence_as_trip(occurrence, include_relations=False):
-    """
-    Format a TripOccurrence as a legacy Trip object.
-    
-    This provides backward compatibility with frontend code
-    that expects the old Trip structure.
-    """
-    template = occurrence.template
-    
-    trip_data = {
-        # IDs
-        'id': occurrence.id,
-        'templateId': template.id,  # NEW: Link to template
-        
-        # From template
-        'title': template.title,
-        'titleHe': template.title_he,
-        'title_he': template.title_he,
-        'description': template.description,
-        'descriptionHe': template.description_he,
-        'description_he': template.description_he,
-        'imageUrl': occurrence.effective_image_url,
-        'image_url': occurrence.effective_image_url,
-        'difficultyLevel': template.difficulty_level,
-        'difficulty_level': template.difficulty_level,
-        
-        # From occurrence
-        'startDate': occurrence.start_date.isoformat() if occurrence.start_date else None,
-        'start_date': occurrence.start_date.isoformat() if occurrence.start_date else None,
-        'endDate': occurrence.end_date.isoformat() if occurrence.end_date else None,
-        'end_date': occurrence.end_date.isoformat() if occurrence.end_date else None,
-        'price': float(occurrence.effective_price) if occurrence.effective_price else None,
-        'singleSupplementPrice': float(template.single_supplement_price) if template.single_supplement_price else None,
-        'single_supplement_price': float(template.single_supplement_price) if template.single_supplement_price else None,
-        'maxCapacity': occurrence.effective_max_capacity,
-        'max_capacity': occurrence.effective_max_capacity,
-        'spotsLeft': occurrence.spots_left,
-        'spots_left': occurrence.spots_left,
-        'status': occurrence.status,
-        
-        # Foreign keys
-        'countryId': template.primary_country_id,
-        'country_id': template.primary_country_id,
-        'guideId': occurrence.guide_id,
-        'guide_id': occurrence.guide_id,
-        'tripTypeId': template.trip_type_id,
-        'trip_type_id': template.trip_type_id,
-        'companyId': template.company_id,  # NEW
-        'company_id': template.company_id,
-        
-        # Timestamps
-        'createdAt': occurrence.created_at.isoformat() if occurrence.created_at else None,
-        'updatedAt': occurrence.updated_at.isoformat() if occurrence.updated_at else None,
-    }
-    
-    if include_relations or True:  # Always include relations for compatibility
-        # Country
-        if template.primary_country:
-            trip_data['country'] = template.primary_country.to_dict()
-        
-        # Guide
-        if occurrence.guide:
-            trip_data['guide'] = occurrence.guide.to_dict()
-        
-        # Trip type
-        if template.trip_type:
-            trip_data['tripType'] = template.trip_type.to_dict()
-            trip_data['trip_type'] = template.trip_type.to_dict()
-        
-        # Company (NEW)
-        if template.company:
-            trip_data['company'] = template.company.to_dict()
-        
-        # Tags
-        tags = [tt.tag.to_dict() for tt in template.template_tags if tt.tag]
-        trip_data['tags'] = tags
-    
-    return trip_data
 
 
 # ============================================
@@ -521,7 +431,8 @@ def get_recommendations_v2():
     - Antarctica special case handling
     - Legacy start_date support
     """
-    from app.services.recommendation import get_recommendations, SCORE_THRESHOLDS
+    from app.services.recommendation import get_recommendations
+    from app.services.recommendation.constants import SCORE_THRESHOLDS
     from app.main import LOGGING_ENABLED
     
     # Import logging and classification (same as V1)
@@ -547,8 +458,31 @@ def get_recommendations_v2():
     try:
         prefs = request.get_json(silent=True) or {}
         
-        # Call recommendation service
-        result = get_recommendations(prefs, format_occurrence_as_trip)
+        # Call recommendation service with schema serializer
+        from app.schemas.trip import TripOccurrenceSchema
+        def serialize_occurrence(occurrence, include_relations=False):
+            """Serialize TripOccurrence using Pydantic schema"""
+            schema = TripOccurrenceSchema.model_validate(occurrence)
+            data = schema.model_dump(by_alias=True)
+            
+            # Only include countries if explicitly needed (not used in recommendations)
+            if 'template' in data and 'countries' in data['template']:
+                del data['template']['countries']
+            
+            return data
+        
+        try:
+            result = get_recommendations(prefs, serialize_occurrence)
+        except Exception as rec_error:
+            # Catch recommendation service errors and return user-friendly message
+            import traceback
+            error_trace = traceback.format_exc()
+            print(f"[V2] Recommendation service error: {error_trace}", flush=True)
+            return jsonify({
+                'success': False,
+                'error': 'שגיאה בעיבוד ההמלצות. אנא נסה שוב או נסה עם העדפות אחרות.',
+                'api_version': 'v2'
+            }), 500
         
         primary_trips = result['primary_trips']
         relaxed_trips = result['relaxed_trips']
@@ -569,7 +503,8 @@ def get_recommendations_v2():
                 'relaxed_count': 0,
                 'data': [],
                 'total_candidates': 0,
-                'total_trips': total_trips_in_db,
+                'total_trips': 0,  # No matched trips
+                'total_trips_in_db': total_trips_in_db,  # Keep for reference
                 'has_relaxed_results': False,
                 'score_thresholds': SCORE_THRESHOLDS,
                 'show_refinement_message': True,
@@ -620,7 +555,8 @@ def get_recommendations_v2():
             'primary_count': len(primary_trips),
             'relaxed_count': len(relaxed_trips),
             'total_candidates': total_candidates,
-            'total_trips': total_trips_in_db,
+            'total_trips': total_candidates,  # Use matched trips for "Show More" logic
+            'total_trips_in_db': total_trips_in_db,  # Keep for reference/info
             'data': all_trips,
             'has_relaxed_results': has_relaxed,
             'score_thresholds': SCORE_THRESHOLDS,
@@ -633,23 +569,36 @@ def get_recommendations_v2():
         
     except Exception as e:
         import traceback
-        print(f"[V2 RECOMMENDATIONS] Error: {traceback.format_exc()}")
+        error_trace = traceback.format_exc()
+        print(f"[V2 RECOMMENDATIONS] Error: {error_trace}", flush=True)
         is_db_error, is_conn_error = is_database_error(e)
         
         if is_conn_error:
             return jsonify({
                 'success': False,
-                'error': 'Database connection unavailable. Please check your configuration or try again later.',
+                'error': 'שגיאת חיבור למסד הנתונים. אנא נסה שוב מאוחר יותר.',
                 'api_version': 'v2'
             }), 503
         elif is_db_error:
             return jsonify({
                 'success': False,
-                'error': 'Database error occurred. Please try again later.',
+                'error': 'שגיאה במסד הנתונים. אנא נסה שוב מאוחר יותר.',
                 'api_version': 'v2'
             }), 503
         else:
-            return jsonify({'success': False, 'error': str(e), 'api_version': 'v2'}), 500
+            # Return user-friendly error message instead of raw Python error
+            error_msg = str(e)
+            if "'<' not supported between instances" in error_msg or "dict" in error_msg:
+                return jsonify({
+                    'success': False,
+                    'error': 'שגיאה בעיבוד ההמלצות. אנא נסה שוב או נסה עם העדפות אחרות.',
+                    'api_version': 'v2'
+                }), 500
+            return jsonify({
+                'success': False,
+                'error': 'שגיאה בעיבוד הבקשה. אנא נסה שוב מאוחר יותר.',
+                'api_version': 'v2'
+            }), 500
 
 
 # ============================================
@@ -680,7 +629,7 @@ def get_schema_info():
                 'companies': '/api/v2/companies',
                 'templates': '/api/v2/templates',
                 'occurrences': '/api/v2/occurrences',
-                'trips': '/api/v2/trips (backward compatible)',
+                'trips': '/api/v2/trips',
                 'recommendations': '/api/v2/recommendations',
             }
         }), 200

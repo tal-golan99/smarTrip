@@ -113,9 +113,14 @@ export function DualRangeSlider({
             isDraggingMin && 'cursor-grabbing scale-110'
           )}
           style={{ right: `${getPercentage(minValue)}%` }}
-          onMouseDown={() => setIsDraggingMin(true)}
+          onMouseDown={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            setIsDraggingMin(true);
+          }}
           onTouchStart={(e) => {
             e.preventDefault();
+            e.stopPropagation();
             setIsDraggingMin(true);
           }}
         >
@@ -130,9 +135,14 @@ export function DualRangeSlider({
             isDraggingMax && 'cursor-grabbing scale-110'
           )}
           style={{ right: `${getPercentage(maxValue)}%` }}
-          onMouseDown={() => setIsDraggingMax(true)}
+          onMouseDown={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            setIsDraggingMax(true);
+          }}
           onTouchStart={(e) => {
             e.preventDefault();
+            e.stopPropagation();
             setIsDraggingMax(true);
           }}
         >

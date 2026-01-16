@@ -10,15 +10,18 @@
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-12+-4169E1?logo=postgresql&logoColor=white)](https://www.postgresql.org/)
 [![SQLAlchemy](https://img.shields.io/badge/SQLAlchemy-2.0-D71F00)](https://www.sqlalchemy.org/)
 [![Python](https://img.shields.io/badge/Python-3.10+-3776AB?logo=python&logoColor=white)](https://www.python.org/)
+[![Zod](https://img.shields.io/badge/Zod-3.22-3E67B1?logo=zod&logoColor=white)](https://zod.dev/)
 
 ---
 
 ## Key Features
 
-- **Intelligent Search** - Personalized trip recommendations based on user preferences
+- **Intelligent Search** - Personalized trip recommendations based on user preferences with 30-point minimum match score
 - **Flexible Filtering** - Advanced search with multiple criteria including location, budget, duration, and difficulty
 - **User Analytics** - Comprehensive tracking and analytics for search behavior and user interactions
 - **Bilingual Support** - Full support for Hebrew and English content
+- **Type-Safe API** - Zod schema validation for all API endpoints with developer logging
+- **Modular Frontend** - Component-based architecture with React Context for state management
 
 ---
 
@@ -31,11 +34,11 @@ flowchart TB
     end
 
     subgraph Vercel["Vercel"]
-        FE["Frontend<br/>React 18 + TypeScript"]
+        FE["Frontend<br/>React 18 + TypeScript<br/>Zod Validation"]
     end
 
     subgraph Render["Render"]
-        BE["Flask API<br/>Python 3.10+"]
+        BE["Flask API<br/>Python 3.10+<br/>Blueprint Architecture"]
     end
 
     subgraph Database["PostgreSQL"]
@@ -43,7 +46,7 @@ flowchart TB
     end
 
     UI --> FE
-    FE -->|"REST API"| BE
+    FE -->|"REST API<br/>Validated Responses"| BE
     BE --> DB
 
     style Client fill:#f5f5f5,stroke:#333
@@ -60,9 +63,10 @@ flowchart TB
 | Technology | Purpose |
 |------------|---------|
 | Next.js 14 | React framework with App Router |
-| React 18 | UI library |
+| React 18 | UI library with Context API |
 | TypeScript 5 | Type safety |
 | Tailwind CSS 3.4 | Utility-first styling |
+| Zod 3.22 | Runtime schema validation |
 | Lucide React | Icon library |
 | Supabase | Authentication and database client |
 
@@ -189,6 +193,7 @@ npm run dev    # Starts on :3000
 npm run dev          # Start Next.js dev server
 npm run lint         # Run ESLint
 npm run build        # Build for production
+npm run test:search  # Test search page structure
 
 # Backend (from backend/ directory)
 python -m app.main   # Start Flask dev server
@@ -220,23 +225,65 @@ trip-recommendations/
 │   │   │   ├── auth/           # Authentication pages
 │   │   │   │   └── callback/   # Auth callback handler
 │   │   │   ├── search/         # Search UI
+│   │   │   │   ├── page.tsx    # Search page (162 lines, refactored)
 │   │   │   │   └── results/    # Search results page
 │   │   │   ├── trip/[id]/      # Trip detail page
 │   │   │   ├── error.tsx       # Error page
 │   │   │   ├── not-found.tsx   # 404 page
 │   │   │   ├── layout.tsx      # Root layout
 │   │   │   └── page.tsx        # Home page
+│   │   ├── api/                # API client layer (mirrors backend)
+│   │   │   ├── client.ts       # Core API utilities
+│   │   │   ├── types.ts        # TypeScript types
+│   │   │   ├── system.ts       # System API
+│   │   │   ├── resources.ts    # Resources API
+│   │   │   ├── events.ts       # Events API
+│   │   │   └── v2.ts           # V2 API
+│   │   ├── schemas/            # Zod validation schemas
+│   │   │   ├── base.ts         # Base schemas
+│   │   │   ├── resources.ts    # Resource schemas
+│   │   │   ├── trip.ts         # Trip schemas
+│   │   │   ├── events.ts       # Event schemas
+│   │   │   └── analytics.ts    # Analytics schemas
 │   │   ├── components/         # React components
 │   │   │   ├── features/       # Feature components
-│   │   │   └── ui/             # UI components
+│   │   │   │   ├── search/     # Search page components
+│   │   │   │   │   ├── filters/          # Filter sections
+│   │   │   │   │   │   ├── LocationFilterSection.tsx
+│   │   │   │   │   │   ├── LocationDropdown.tsx
+│   │   │   │   │   │   ├── SelectedLocationsList.tsx
+│   │   │   │   │   │   ├── TripTypeFilterSection.tsx
+│   │   │   │   │   │   ├── ThemeFilterSection.tsx
+│   │   │   │   │   │   ├── DateFilterSection.tsx
+│   │   │   │   │   │   └── RangeFiltersSection.tsx
+│   │   │   │   │   ├── SearchPageHeader.tsx
+│   │   │   │   │   ├── SearchActions.tsx
+│   │   │   │   │   ├── SearchPageLoading.tsx
+│   │   │   │   │   ├── SearchPageError.tsx
+│   │   │   │   │   └── index.ts           # Barrel exports
+│   │   │   │   ├── TripResultCard.tsx
+│   │   │   │   ├── RegistrationModal.tsx
+│   │   │   │   └── LogoutConfirmModal.tsx
+│   │   │   └── ui/             # Reusable UI components
+│   │   │       ├── DualRangeSlider.tsx
+│   │   │       ├── SelectionBadge.tsx
+│   │   │       ├── TagCircle.tsx
+│   │   │       └── ClearFiltersButton.tsx
+│   │   ├── contexts/           # React Context providers
+│   │   │   └── SearchContext.tsx  # Search state management
 │   │   ├── hooks/              # Custom React hooks
-│   │   │   └── useTracking.ts  # Tracking hook
+│   │   │   ├── useSearch.ts    # Search state hook
+│   │   │   ├── useSyncSearchQuery.ts  # URL sync hook
+│   │   │   ├── useTracking.ts  # Tracking hooks
+│   │   │   └── useUser.ts      # User state hook
 │   │   ├── lib/                # Client-side libraries
 │   │   │   ├── dataStore.tsx   # Data store context
-│   │   │   └── supabaseClient.ts  # Supabase client
-│   │   └── services/           # API and tracking services
-│   │       ├── api.service.ts  # API client
+│   │   │   ├── supabaseClient.ts  # Supabase client
+│   │   │   └── utils.ts        # Utility functions
+│   │   └── services/           # Service layer
 │   │       └── tracking.service.ts  # Tracking service
+│   ├── scripts/                # Development scripts
+│   │   └── test-search-page.ts # Search page validation
 │   ├── public/                 # Static assets
 │   │   ├── images/             # Image assets
 │   │   │   ├── continents/     # Continent images
@@ -254,7 +301,7 @@ trip-recommendations/
 │
 ├── backend/                    # Flask backend application
 │   ├── app/                    # Main application package
-│   │   ├── api/                # API routes
+│   │   ├── api/                # API routes (Blueprint architecture)
 │   │   │   ├── analytics/      # Analytics endpoints
 │   │   │   ├── events/         # Event tracking endpoints
 │   │   │   ├── resources/      # Resource endpoints
@@ -269,7 +316,11 @@ trip-recommendations/
 │   │   │   └── trip.py         # Trip models (Templates/Occurrences)
 │   │   ├── services/           # Business logic
 │   │   │   ├── events.py       # Event processing
-│   │   │   └── recommendation.py  # Recommendation algorithm
+│   │   │   └── recommendation/ # Recommendation engine
+│   │   │       ├── __init__.py
+│   │   │       ├── constants.py  # MIN_SCORE_THRESHOLD = 30
+│   │   │       ├── primary_search.py
+│   │   │       └── relaxed_search.py
 │   │   └── main.py             # Flask application entry point
 │   ├── migrations/             # Database migrations
 │   ├── recommender/            # Recommendation system
@@ -291,6 +342,17 @@ trip-recommendations/
 │   └── runtime.txt            # Python runtime version
 │
 ├── docs/                      # Documentation
+│   ├── api/                   # API documentation
+│   │   ├── API_STRUCTURE.md   # API structure and endpoints
+│   │   └── README.md          # API overview
+│   ├── architecture/          # Architecture documentation
+│   │   ├── API_STRUCTURE_ALIGNMENT.md  # Frontend/Backend alignment
+│   │   ├── FRONTEND_ARCHITECTURE.md    # Frontend architecture
+│   │   └── ...
+│   ├── proposals/             # Design proposals
+│   │   ├── SEARCH_PAGE_REFACTOR_PROPOSAL.md
+│   │   └── ...
+│   └── README.md              # Documentation index
 ├── .github/                   # GitHub configuration
 │   └── workflows/             # CI/CD workflows
 │       └── README.md          # Workflows documentation
@@ -386,9 +448,53 @@ The recommendation engine uses a multi-factor scoring algorithm to rank trips ba
 - **Budget alignment** - Price matching within acceptable range
 - **Availability status** - Guaranteed departures and limited availability
 
+### Scoring Configuration
+
+- **Minimum Score Threshold**: 30 points (configurable in `backend/app/services/recommendation/constants.py`)
+- **Base Score**: 30 points (all passing trips)
+- **Relaxed Penalty**: -15 points (for expanded search results)
+
 Results are presented with match scores ranging from 0-100. When initial results are limited, the system automatically expands search criteria to provide additional recommendations.
 
 For detailed algorithm documentation, see `docs/RECOMMENDATION_ENGINE_COMPREHENSIVE.md`.
+
+---
+
+## Frontend Architecture
+
+### Component Organization
+
+The frontend follows a modular architecture with clear separation of concerns:
+
+- **Pages** (`app/`) - Route-based pages using Next.js App Router
+- **Components** (`components/`) - Reusable UI and feature components
+- **API Layer** (`api/`) - Type-safe API client mirroring backend structure
+- **Schemas** (`schemas/`) - Zod validation schemas for runtime type checking
+- **Contexts** (`contexts/`) - React Context providers for state management
+- **Hooks** (`hooks/`) - Custom React hooks for reusable logic
+- **Services** (`services/`) - Business logic and orchestration
+
+### Search Page Architecture
+
+The search page has been refactored from a monolithic 1,079-line component into a modular structure:
+
+- **Main Page** (`page.tsx`) - 162 lines, minimal Suspense wrapper
+- **Search Context** (`SearchContext.tsx`) - Centralized state management
+- **Filter Sections** - Modular, focused components (60-140 lines each)
+- **Hooks** - Headless logic for search state and URL synchronization
+
+### State Management
+
+- **React Context API** - Shared search state via `SearchProvider`
+- **Custom Hooks** - `useSearch()` for accessing shared state
+- **URL Synchronization** - Search parameters preserved in URL for shareability
+
+### API Integration
+
+- **Zod Validation** - All API responses validated at runtime
+- **Type Safety** - TypeScript types inferred from Zod schemas
+- **Developer Logging** - Detailed logging in development mode
+- **Error Handling** - Consistent error handling with retry logic
 
 ---
 
@@ -468,14 +574,22 @@ The backend will automatically initialize the database schema on first deploymen
 
 ---
 
-## Documentation
+## Recent Updates
 
-Comprehensive documentation is available in the `docs/` folder:
+### Frontend Refactoring (January 2026)
 
-- `DATABASE_CONNECTION_GUIDE.md` - Database connection troubleshooting
-- `SUPABASE_CONNECTION_STRING_CHOICE.md` - Which connection string to use
-- `DEPLOYMENT_CONFIGURATION.md` - Deployment setup guide
-- `PYTHON_PACKAGE_STRUCTURE.md` - Understanding `__init__.py` files
+- Refactored search page from 1,079 lines to modular architecture
+- Implemented React Context for state management
+- Created 7 focused filter section components
+- Added URL synchronization for shareable search links
+- Removed backward compatibility layer for cleaner code
+
+### Backend Updates
+
+- Configurable minimum score threshold (30 points)
+- Backend filtering for low-score trips
+- Improved relaxed search algorithm
+- Enhanced API response structure
 
 ---
 
@@ -488,3 +602,15 @@ All Rights Reserved
 ## Author
 
 Developed as a portfolio project demonstrating full-stack development, algorithm design, and production deployment practices.
+
+---
+
+## Documentation
+
+For more detailed documentation, see:
+
+- [Frontend README](frontend/README.md) - Frontend architecture and setup
+- [Backend README](backend/README.md) - Backend architecture and API
+- [API Structure](docs/api/API_STRUCTURE.md) - Detailed API documentation
+- [Architecture Docs](docs/architecture/) - System architecture documentation
+- [Search Page Refactor](docs/proposals/SEARCH_PAGE_REFACTOR_PROPOSAL.md) - Frontend refactoring details

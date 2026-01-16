@@ -12,7 +12,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from datetime import datetime
 from app import app, db_session, Trip, Country, TripType, Tag, TripStatus
 # Note: TagCategory enum was removed
-from app.services.recommendation import SCORING_WEIGHTS, SCORE_THRESHOLDS, RecommendationConfig
+from app.services.recommendation.constants import SCORING_WEIGHTS, SCORE_THRESHOLDS, RecommendationConfig
 
 def run_analysis():
     print('='*80)

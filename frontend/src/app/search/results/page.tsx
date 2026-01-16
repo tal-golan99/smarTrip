@@ -16,14 +16,15 @@ import {
   ClickSource,
 } from '@/hooks/useTracking';
 import { trackEvent } from '@/services/tracking.service';
-import type { Trip, Country, Guide, RecommendedTrip } from '@/services/api.service';
-import { getRecommendations } from '@/services/api.service';
+import type { TripOccurrence, Country, Guide, RecommendedTripOccurrence } from '@/api';
+import { getRecommendations, type RecommendationPreferences } from '@/api';
 
 interface SearchResult {
-  trip: Trip;
+  tripOccurrence: TripOccurrence;
   match_score: number;
   match_details: string[];
   guide?: Guide;
+  is_relaxed?: boolean; // Flag indicating if this is a relaxed result
 }
 
 import {
@@ -32,7 +33,6 @@ import {
   getStatusLabel,
   getStatusIconUrl,
   getStatusIcon,
-  getTripField,
   type ScoreThresholds,
 } from '@/lib/utils';
 import { TripResultCard } from '@/components/features/TripResultCard';
@@ -108,12 +108,20 @@ function useScrollDepthTracking(totalResults: number, isLoading: boolean) {
   }, [totalResults, isLoading]);
 }
 
+// "Show More" configuration - can be easily changed
+const INITIAL_DISPLAY_COUNT = 10; // Number of results shown initially
+const SHOW_MORE_INCREMENT = 10; // Number of additional results per click
+const MAX_SHOW_MORE_CLICKS = 1; // Maximum number of times "show more" can be clicked
+
 function SearchResultsPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   
   const [results, setResults] = useState<SearchResult[]>([]);
-  const [totalTrips, setTotalTrips] = useState(0);
+  const [allResults, setAllResults] = useState<SearchResult[]>([]); // Store all results for "show more"
+  const [displayedCount, setDisplayedCount] = useState(INITIAL_DISPLAY_COUNT); // Number of results currently displayed
+  const [showMoreClicks, setShowMoreClicks] = useState(0); // Track how many times "show more" was clicked
+  const [totalTripsInDb, setTotalTripsInDb] = useState(0); // Total available trips in DB (for empty state message)
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [scoreThresholds, setScoreThresholds] = useState<ScoreThresholds>({ HIGH: 70, MID: 50 });
@@ -123,6 +131,8 @@ function SearchResultsPageContent() {
   const [relaxedCount, setRelaxedCount] = useState(0);
   const [responseTimeMs, setResponseTimeMs] = useState(0);
   const [requestId, setRequestId] = useState<string | undefined>();
+  const [showMoreAvailable, setShowMoreAvailable] = useState(false);
+  const [previousDisplayedCount, setPreviousDisplayedCount] = useState(INITIAL_DISPLAY_COUNT);
   
   // Phase 1: Track page view
   usePageView('search_results');
@@ -163,13 +173,13 @@ function SearchResultsPageContent() {
       const budget = Number(searchParams.get('budget')) || 15000;
       const difficulty = Number(searchParams.get('difficulty')) || 2;
 
-      const preferences = {
-        selected_countries: countries,
-        selected_continents: continents,
-        preferred_type_id: type ? Number(type) : undefined,
-        preferred_theme_ids: themes,
-        min_duration: minDuration,
-        max_duration: maxDuration,
+      const preferences: RecommendationPreferences = {
+        selectedCountries: countries,
+        selectedContinents: continents,
+        preferredTypeId: type ? Number(type) : undefined,
+        preferredThemeIds: themes,
+        minDuration: minDuration,
+        maxDuration: maxDuration,
         budget: budget,
         difficulty: difficulty,
         // Send year and month as separate hard filters
@@ -190,9 +200,9 @@ function SearchResultsPageContent() {
           
           if (cacheAge < CACHE_MAX_AGE) {
             // Use cached data immediately
-            console.log('[Results] Using cached data');
-            setResults(cachedData.results);
-            setTotalTrips(cachedData.totalTrips);
+            setAllResults(cachedData.results); // Store all results
+            setResults(cachedData.results.slice(0, INITIAL_DISPLAY_COUNT)); // Show initial results
+            setTotalTripsInDb(cachedData.totalTripsInDb || 0);
             setPrimaryCount(cachedData.primaryCount);
             setRelaxedCount(cachedData.relaxedCount);
             setHasRelaxedResults(cachedData.hasRelaxedResults);
@@ -202,6 +212,11 @@ function SearchResultsPageContent() {
             if (cachedData.requestId) {
               setRequestId(cachedData.requestId);
             }
+            setDisplayedCount(INITIAL_DISPLAY_COUNT); // Reset to initial count
+            setPreviousDisplayedCount(INITIAL_DISPLAY_COUNT); // Reset animation tracking
+            setShowMoreClicks(0); // Reset click counter
+            
+            
             setIsLoading(false);
             setError(null);
             return;
@@ -211,7 +226,7 @@ function SearchResultsPageContent() {
           }
         }
       } catch (e) {
-        console.warn('[Results] Cache read error:', e);
+        // Cache read failed, continue to fetch from API
       }
 
       // No cache or expired - fetch from API
@@ -223,9 +238,6 @@ function SearchResultsPageContent() {
         setIsLoading(true);
       }
       setError(null);
-
-      // Log the request preferences (for debugging)
-      console.log('Fetching recommendations with preferences:', preferences);
 
       // Phase 1: Track response time
       const startTime = Date.now();
@@ -240,13 +252,6 @@ function SearchResultsPageContent() {
         const responseTime = endTime - startTime;
         setResponseTimeMs(responseTime);
 
-        console.log('API response:', { 
-          success: response.success, 
-          count: response.count, 
-          totalTrips: response.total_trips,
-          resultsLength: response.data?.length 
-        });
-
         if (!response.success) {
           console.error('API error:', response.error);
           // Handle timeout errors specifically
@@ -259,20 +264,28 @@ function SearchResultsPageContent() {
           return;
         }
 
-        // Convert RecommendedTrip[] to SearchResult[] format
-        // response.data contains the trips array with match_score and match_details
-        const searchResults: SearchResult[] = (response.data || []).map((trip: RecommendedTrip) => ({
-          trip: trip as Trip,
-          match_score: trip.match_score,
-          match_details: trip.match_details || [],
-          guide: (trip as any).guide,
-        }));
+        // Convert RecommendedTripOccurrence[] to SearchResult[] format
+        // response.data contains the trip occurrences array with match_score and match_details
+        // Backend already filters trips with score < MIN_SCORE_THRESHOLD (30)
+        const searchResults: SearchResult[] = (response.data || [])
+          .map((tripOccurrence: RecommendedTripOccurrence) => ({
+            tripOccurrence: tripOccurrence,
+            match_score: tripOccurrence.match_score,
+            match_details: tripOccurrence.match_details || [],
+            guide: tripOccurrence.guide,
+            is_relaxed: tripOccurrence.is_relaxed || false, // Preserve is_relaxed flag
+          }));
         
-        setResults(searchResults);
-        setTotalTrips(response.total_trips || 0);
+        setAllResults(searchResults); // Store all results
+        setResults(searchResults.slice(0, INITIAL_DISPLAY_COUNT)); // Show initial results
+        setTotalTripsInDb(response.total_trips_in_db || 0); // Store for empty state message
+        setDisplayedCount(INITIAL_DISPLAY_COUNT); // Reset to initial count
+        setPreviousDisplayedCount(INITIAL_DISPLAY_COUNT); // Reset animation tracking
+        setShowMoreClicks(0); // Reset click counter
         setPrimaryCount(response.primary_count || response.count || 0);
         setRelaxedCount(response.relaxed_count || 0);
         setHasRelaxedResults(response.has_relaxed_results || false);
+        
         
         // Phase 1: Store request ID for event correlation
         if (response.request_id) {
@@ -288,7 +301,7 @@ function SearchResultsPageContent() {
         try {
           sessionStorage.setItem(cacheKey, JSON.stringify({
             results: searchResults,
-            totalTrips: response.total_trips || 0,
+            totalTripsInDb: response.total_trips_in_db || 0,
             primaryCount: response.primary_count || response.count || 0,
             relaxedCount: response.relaxed_count || 0,
             hasRelaxedResults: response.has_relaxed_results || false,
@@ -299,11 +312,10 @@ function SearchResultsPageContent() {
             timestamp: Date.now(),
           }));
         } catch (e) {
-          console.warn('[Results] Cache write error:', e);
+          // Cache write failed, continue without caching
         }
         
       } catch (fetchErr: any) {
-        console.error('Search failed:', fetchErr);
         // Handle timeout errors
         if (fetchErr.name === 'AbortError' || fetchErr.message?.includes('timeout')) {
           setError('הבקשה ארכה יותר מדי זמן. אנא נסה שוב או נסה עם פחות מסננים.');
@@ -389,7 +401,7 @@ function SearchResultsPageContent() {
             {/* Title - Centered and responsive */}
             <h1 className="text-xl md:text-2xl lg:text-3xl font-bold text-center text-white flex-1">
               {results.length > 0 
-                ? `נמצאו ${primaryCount} טיולים מומלצים עבורך` 
+                ? `נמצאו ${allResults.length} טיולים מומלצים עבורך` 
                 : 'לא נמצאו טיולים מתאימים'}
             </h1>
             
@@ -421,7 +433,7 @@ function SearchResultsPageContent() {
             <div className="max-w-2xl mx-auto">
               <p className="text-[#5a5a5a] text-xl leading-relaxed mb-8">
                 אומנם לא מצאנו התאמה מדויקת הפעם, אבל מתוך{' '}
-                <span className="font-bold text-[#076839]">{totalTrips}</span> הטיולים שקיימים באתר – בטוח יש אחד שיתאים בול.
+                <span className="font-bold text-[#076839]">{totalTripsInDb}</span> הטיולים שקיימים באתר – בטוח יש אחד שיתאים בול.
               </p>
               <button
                 onClick={handleBackToSearch}
@@ -436,16 +448,24 @@ function SearchResultsPageContent() {
           <>
             {/* Results List (Vertical) */}
             <div className="space-y-6 mb-8">
-              {results.map((result, index) => {
-                const trip = result.trip || result;
-                const tripId = trip?.id;
-                const isRelaxed = (result as any).is_relaxed || false;
-                const isFirstRelaxed = isRelaxed && (index === 0 || !(results[index - 1] as any).is_relaxed);
+              {allResults.slice(0, displayedCount).map((result, index) => {
+                // Add animation class for newly displayed items
+                const isNewlyDisplayed = index >= previousDisplayedCount && index < displayedCount;
+                const tripOccurrence = result.tripOccurrence;
+                const tripId = tripOccurrence?.id;
+                const isRelaxed = result.is_relaxed || false;
+                // Check if this is the first relaxed result by checking if previous result was not relaxed
+                const prevResult = index > 0 ? allResults[index - 1] : null;
+                const isFirstRelaxed = isRelaxed && (!prevResult || !prevResult.is_relaxed);
+                // Show message if there are not many results (fewer than 5) OR if this is the first relaxed result
+                const MIN_RESULTS_THRESHOLD = 5; // Match backend MIN_RESULTS_THRESHOLD
+                const hasFewResults = allResults.length <= MIN_RESULTS_THRESHOLD;
+                const shouldShowExpandedMessage = (index === 0 && hasFewResults) || isFirstRelaxed;
                 
                 return (
                   <React.Fragment key={tripId || index}>
-                    {/* Separator before first relaxed result */}
-                    {isFirstRelaxed && (
+                    {/* Separator before first relaxed result or when there are few results */}
+                    {shouldShowExpandedMessage && (
                       <div className="my-8 py-6">
                         <div className="flex items-center gap-4 mb-4">
                           <div className="flex-1 h-px bg-gradient-to-r from-transparent via-gray-300 to-transparent"></div>
@@ -459,18 +479,25 @@ function SearchResultsPageContent() {
                     )}
                     
                     {(() => {
+                      // Add animation class for newly displayed items
+                      const isNewlyDisplayed = index >= previousDisplayedCount && index < displayedCount;
                 
-                // Get fields with both naming conventions support
-                const title = getTripField(trip, 'title_he', 'titleHe') || getTripField(trip, 'title', 'title') || 'טיול מומלץ';
-                const description = getTripField(trip, 'description_he', 'descriptionHe') || getTripField(trip, 'description', 'description') || '';
-                const imageUrl = getTripField(trip, 'image_url', 'imageUrl');
-                const startDate = getTripField(trip, 'start_date', 'startDate');
-                const endDate = getTripField(trip, 'end_date', 'endDate');
-                const spotsLeft = getTripField(trip, 'spots_left', 'spotsLeft');
-                const tripType = getTripField(trip, 'trip_type', 'tripType') || getTripField(trip, 'type', 'type');
+                // Get fields from nested structure (TripOccurrence with template)
+                const template = tripOccurrence.template;
+                if (!template) {
+                  return null;
+                }
+                const title = template.titleHe || template.title || 'טיול מומלץ';
+                const description = template.descriptionHe || template.description || '';
+                const imageUrl = tripOccurrence.effectiveImageUrl || tripOccurrence.imageUrlOverride || template.imageUrl;
+                const startDate = tripOccurrence.startDate;
+                const endDate = tripOccurrence.endDate;
+                const spotsLeft = tripOccurrence.spotsLeft;
+                const tripType = template.tripType;
                 const tripTypeNameHe = tripType?.nameHe || '';
-                const tripTypeId = getTripField(trip, 'trip_type_id', 'tripTypeId');
+                const tripTypeId = template.tripTypeId;
                 const isPrivateGroup = tripTypeId === 10;
+                const price = tripOccurrence.effectivePrice || tripOccurrence.priceOverride || template.basePrice || 0;
                 
                 // Phase 1: Determine source for click attribution
                 const clickSource: ClickSource = isRelaxed ? 'relaxed_results' : 'search_results';
@@ -484,7 +511,10 @@ function SearchResultsPageContent() {
                     score={matchScore}
                     source={clickSource}
                     onClick={() => tripId && handleTripClick(tripId, index, matchScore, clickSource)}
-                    className="group block relative h-80 rounded-xl overflow-hidden shadow-lg hover:shadow-2xl transition-all duration-500 cursor-pointer"
+                    className={clsx(
+                      "group block relative h-80 rounded-xl overflow-hidden shadow-lg hover:shadow-2xl transition-all duration-500 cursor-pointer",
+                      isNewlyDisplayed && "opacity-0 translate-y-4 animate-[fadeInSlideUp_0.5s_ease-in-out_forwards]"
+                    )}
                   >
                     {/* Background */}
                     <div className="absolute inset-0 bg-gray-400" />
@@ -497,34 +527,42 @@ function SearchResultsPageContent() {
                       const score = result?.match_score || 0;
                       const colorLevel = getScoreColor(score, scoreThresholds);
                       const bgClass = getScoreBgClass(colorLevel);
+                      // Use inline style for color to ensure it works
+                      let backgroundColor = '#ef4444'; // Red (low)
+                      if (colorLevel === 'high') {
+                        backgroundColor = '#12acbe'; // Turquoise
+                      } else if (colorLevel === 'mid') {
+                        backgroundColor = '#f59e0b'; // Orange
+                      }
+                      
                       return (
-                        <div className={clsx(
-                          "absolute top-4 right-4 px-4 py-2 rounded-full shadow-lg",
-                          bgClass
-                        )}>
+                        <div 
+                          className="absolute top-4 right-4 px-4 py-2 rounded-full shadow-lg"
+                          style={{ backgroundColor }}
+                        >
                           <span className="text-2xl font-bold text-white">{score}</span>
                         </div>
                       );
                     })()}
                     
                     {/* Top-Left: Status Badge (Text + Icon) */}
-                    {trip?.status && (
+                    {tripOccurrence?.status && (
                       <div 
                         className="absolute top-4 left-4 px-4 py-2 bg-white/20 backdrop-blur-sm rounded-full flex flex-row items-center gap-2"
                       >
                         {/* Text on Left */}
                         <span className="text-sm font-semibold text-white">
-                          {getStatusLabel(trip.status)}
+                          {getStatusLabel(tripOccurrence.status)}
                         </span>
                         
                         {/* Icon on Right - Try image first, fallback to Lucide */}
                         {(() => {
-                          const iconUrl = getStatusIconUrl(trip.status);
+                            const iconUrl = getStatusIconUrl(tripOccurrence.status);
                           if (iconUrl) {
                             return (
                               <img 
                                 src={iconUrl} 
-                                alt={getStatusLabel(trip.status)}
+                                alt={getStatusLabel(tripOccurrence.status)}
                                 className="w-5 h-5"
                                 onError={(e) => {
                                   // Fallback to Lucide icon if image fails
@@ -533,7 +571,7 @@ function SearchResultsPageContent() {
                               />
                             );
                           } else {
-                            const StatusIcon = getStatusIcon(trip.status);
+                            const StatusIcon = getStatusIcon(tripOccurrence.status);
                             return <StatusIcon className="w-5 h-5 text-white" />;
                           }
                         })()}
@@ -560,26 +598,26 @@ function SearchResultsPageContent() {
                       </p>
                       
                       {/* Guide Name (Hebrew ONLY - Enhanced Styling) */}
-                      {result?.guide?.name && (
+                      {tripOccurrence?.guide?.name && (
                         <p className="text-gray-200 text-xs md:text-sm mb-2 md:mb-3 drop-shadow-lg font-medium">
-                          בהדרכה של: <span className="text-white font-bold">{result.guide.name}</span>
+                          בהדרכה של: <span className="text-white font-bold">{tripOccurrence.guide.name}</span>
                         </p>
                       )}
                       
                       <div className="text-white drop-shadow-md text-base md:text-lg font-semibold" dir="ltr">
                         {!isPrivateGroup && startDate && endDate && (
-                          <span className="whitespace-nowrap text-sm md:text-lg">
+                          <span className="whitespace-nowrap text-sm md:text-lg" dir="ltr">
                             {new Date(startDate).toLocaleDateString('en-GB').replace(/\//g, '.')}
                             {' - '}
                             {new Date(endDate).toLocaleDateString('en-GB').replace(/\//g, '.')}
                           </span>
                         )}
-                        {trip?.price && startDate && !isPrivateGroup && (
+                        {price && startDate && !isPrivateGroup && (
                           <span className="mx-2 md:mx-3 text-[#12acbe] text-xl md:text-2xl font-bold">|</span>
                         )}
-                        {trip?.price && (
+                        {price && (
                           <span className="whitespace-nowrap text-sm md:text-lg">
-                            ${Math.round(trip.price).toLocaleString()}
+                            ${Math.round(price).toLocaleString()}
                           </span>
                         )}
                       </div>
@@ -591,6 +629,34 @@ function SearchResultsPageContent() {
                 );
               })}
             </div>
+
+            {/* Show More Button */}
+            {/* Button visibility logic:
+                1. Show if: allResults.length > displayedCount (more results available in array)
+                2. Hide if: allResults.length <= displayedCount (all shown) OR clicks >= MAX_SHOW_MORE_CLICKS */}
+            {allResults.length > displayedCount && showMoreClicks < MAX_SHOW_MORE_CLICKS && (
+              <div className="text-center mb-6">
+                <button
+                  onClick={() => {
+                    // Calculate how many more to show (up to SHOW_MORE_INCREMENT, or all remaining)
+                    const remainingInArray = allResults.length - displayedCount;
+                    const toShow = Math.min(SHOW_MORE_INCREMENT, remainingInArray);
+                    
+                    const newCount = displayedCount + toShow;
+                    setPreviousDisplayedCount(displayedCount); // Track previous count for animation
+                    setDisplayedCount(newCount);
+                    setResults(allResults.slice(0, newCount));
+                    
+                    // Always increment click counter to enforce click limit
+                    // Button will hide when clicks >= MAX_SHOW_MORE_CLICKS
+                    setShowMoreClicks(showMoreClicks + 1);
+                  }}
+                  className="inline-flex items-center gap-2 px-8 py-4 bg-[#12acbe] text-white rounded-xl font-bold text-lg hover:bg-[#0f9baa] transition-all shadow-lg hover:shadow-xl"
+                >
+                  הצג עוד תוצאות
+                </button>
+              </div>
+            )}
 
             {/* Back to Search Button */}
             <div className="text-center pt-4">
@@ -623,7 +689,8 @@ function ResultsPageLoading() {
             alt="SmartTrip Logo" 
             width={180} 
             height={180} 
-            className="mx-auto"
+            className="mx-auto h-auto"
+            style={{ width: 'auto' }}
             priority
           />
         </div>

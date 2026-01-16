@@ -14,10 +14,9 @@ import {
   trackPhoneContact,
   trackSaveTrip,
 } from '@/hooks/useTracking';
-import type { Trip } from '@/services/api.service';
-import { getTrip } from '@/services/api.service';
+import type { TripOccurrence } from '@/api';
+import { getTripOccurrence } from '@/api';
 import {
-  getTripField,
   formatDate,
   calculateDuration,
   getDifficultyLabel,
@@ -39,7 +38,7 @@ export default function TripPage() {
     tripIdNum = undefined;
   }
   
-  const [trip, setTrip] = useState<Trip | null>(null);
+  const [trip, setTrip] = useState<TripOccurrence | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -64,7 +63,7 @@ export default function TripPage() {
       setError(null);
 
       try {
-        const response = await getTrip(tripIdNum);
+        const response = await getTripOccurrence(tripIdNum);
         
         if (!response.success || !response.data) {
           if (response.error?.includes('404') || response.error?.includes('not found')) {
@@ -126,18 +125,42 @@ export default function TripPage() {
     );
   }
 
-  // Get trip fields
-  const title = getTripField(trip, 'title_he', 'titleHe') || getTripField(trip, 'title', 'title') || 'טיול מומלץ';
-  const description = getTripField(trip, 'description_he', 'descriptionHe') || getTripField(trip, 'description', 'description') || '';
-  const startDate = getTripField(trip, 'start_date', 'startDate');
-  const endDate = getTripField(trip, 'end_date', 'endDate');
+  // Get trip fields from nested structure (TripOccurrence with template)
+  const template = trip.template;
+  if (!template) {
+    return (
+      <div className="min-h-screen bg-white flex items-center justify-center">
+        <div className="text-center max-w-md px-4">
+          <p className="text-red-600 text-xl font-bold mb-4">שגיאה: תבנית הטיול לא נמצאה</p>
+          <button
+            onClick={handleBack}
+            className="inline-flex items-center gap-2 px-6 py-3 bg-[#076839] text-white rounded-xl font-medium hover:bg-[#0ba55c] transition-all"
+          >
+            <ArrowRight className="w-5 h-5" />
+            חזור לתוצאות
+          </button>
+        </div>
+      </div>
+    );
+  }
+  
+  const title = template.titleHe || template.title || 'טיול מומלץ';
+  const description = template.descriptionHe || template.description || '';
+  const startDate = trip.startDate;
+  const endDate = trip.endDate;
   const duration = calculateDuration(startDate, endDate);
   const guideName = trip.guide?.name || '';
-  const countryName = trip.country?.nameHe || trip.country?.name || '';
-  const difficultyLevel = getTripField(trip, 'difficulty_level', 'difficultyLevel');
-  const spotsLeft = getTripField(trip, 'spots_left', 'spotsLeft');
-  const tripType = (trip as any).type || (trip as any).trip_type;
+  const countryName = template.primaryCountry?.nameHe || template.primaryCountry?.name || '';
+  const difficultyLevel = template.difficultyLevel;
+  const spotsLeft = trip.spotsLeft;
+  const tripType = template.tripType;
   const isPrivateGroup = tripType?.name === 'Private Groups' || tripType?.nameHe === 'קבוצות פרטיות';
+  
+  // Get effective price
+  const price = trip.effectivePrice || trip.priceOverride || template.basePrice || 0;
+  
+  // Get effective image URL
+  const imageUrl = trip.effectiveImageUrl || trip.imageUrlOverride || template.imageUrl;
 
   return (
     <div className="min-h-screen bg-white flex flex-col">
@@ -180,7 +203,7 @@ export default function TripPage() {
           <div className="bg-gray-50 rounded-xl p-4 text-center">
             <Calendar className="w-6 h-6 text-[#12acbe] mx-auto mb-2" />
             <p className="text-xs text-gray-500 mb-1">תאריכים</p>
-            <p className="text-sm font-bold text-[#5a5a5a]">
+            <p className="text-sm font-bold text-[#5a5a5a]" dir="ltr">
               {isPrivateGroup ? 'ניתן לקבוע מול המדריך' : `${formatDate(startDate)} - ${formatDate(endDate)}`}
             </p>
           </div>
@@ -198,7 +221,7 @@ export default function TripPage() {
           <div className="bg-gray-50 rounded-xl p-4 text-center">
             <DollarSign className="w-6 h-6 text-[#12acbe] mx-auto mb-2" />
             <p className="text-xs text-gray-500 mb-1">מחיר</p>
-            <p className="text-sm font-bold text-[#076839]">${Math.round(trip.price || 0).toLocaleString()}</p>
+            <p className="text-sm font-bold text-[#076839]">${Math.round(price).toLocaleString()}</p>
           </div>
           
           {/* Difficulty */}
@@ -232,14 +255,14 @@ export default function TripPage() {
           )}
           
           {/* Company Info */}
-          {trip.company && (
+          {template.company && (
             <div className="flex-1 min-w-[200px] flex items-center gap-3 p-4 bg-[#076839]/10 rounded-xl">
               <div className="w-12 h-12 rounded-full bg-[#076839] flex items-center justify-center">
                 <MapPin className="w-6 h-6 text-white" />
               </div>
               <div className="text-right">
                 <p className="text-sm text-gray-500">מאורגן על ידי</p>
-                <p className="text-lg font-bold text-[#076839]">{trip.company.nameHe || trip.company.name}</p>
+                <p className="text-lg font-bold text-[#076839]">{template.company.nameHe || template.company.name}</p>
               </div>
             </div>
           )}
@@ -253,7 +276,7 @@ export default function TripPage() {
           </p>
         </div>
 
-        {/* Spots Left Warning - Show if LAST_PLACES status OR spots_left <= 4 */}
+        {/* Spots Left Warning - Show if LAST_PLACES status OR spotsLeft <= 4 */}
         {(trip.status?.toUpperCase().replace(/\s+/g, '_') === 'LAST_PLACES' || (spotsLeft !== undefined && spotsLeft <= 4 && spotsLeft > 0)) && (
           <div className="mb-8 p-4 bg-orange-50 border-2 border-orange-300 rounded-xl shadow-md">
             <p className="text-orange-700 font-bold text-center text-lg">

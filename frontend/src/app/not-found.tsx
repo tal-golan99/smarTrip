@@ -10,7 +10,8 @@ export default function NotFound() {
           alt="SmartTrip Logo"
           width={120}
           height={120}
-          className="mx-auto mb-6"
+          className="mx-auto mb-6 h-auto"
+          style={{ width: 'auto' }}
         />
         <h1 className="text-6xl font-bold mb-4">404</h1>
         <h2 className="text-2xl font-semibold mb-4">הדף לא נמצא</h2>

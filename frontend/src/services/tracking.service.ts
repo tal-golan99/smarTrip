@@ -13,6 +13,7 @@
  */
 
 import { v4 as uuidv4 } from 'uuid';
+import { startSession, trackEventsBatch } from '@/api/events';
 
 // ============================================
 // CONSTANTS
@@ -29,9 +30,6 @@ const SESSION_TIMEOUT_MS = 30 * 60 * 1000;
 // Event batching configuration
 const BATCH_SIZE = 10;
 const BATCH_INTERVAL_MS = 5000;
-
-// API configuration
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
 
 // ============================================
 // TYPE DEFINITIONS
@@ -210,32 +208,26 @@ export async function initializeSession(): Promise<void> {
   const referrer = document.referrer || '';
   
   try {
-    const response = await fetch(`${API_BASE}/api/session/start`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        anonymous_id: anonymousId,
-        session_id: sessionId,
-        device_type: deviceType,
-        referrer: referrer,
-      }),
+    // Use API client for transport, but service handles orchestration (retry logic, etc.)
+    const response = await startSession({
+      sessionId,
+      anonymousId,
+      deviceType,
+      referrer,
     });
     
-    if (response.ok) {
+    if (response.success) {
       sessionInitialized = true;
     } else {
-      // Log but don't block - graceful degradation
-      const errorData = await response.json().catch(() => ({}));
-      console.warn(
-        '[Tracking] Session start failed, continuing without tracking:',
-        errorData.error || response.statusText
-      );
+      // Silently handle errors - graceful degradation
+      // Session tracking is optional, don't block user experience
       // Don't set sessionInitialized = false to prevent retries
       // Just mark as attempted so we don't retry immediately
       sessionInitialized = true; // Prevent immediate retry
     }
   } catch (error) {
     // Network error - log but continue
+    // Service layer handles error recovery (retry strategies, etc.)
     console.warn('[Tracking] Session start error, continuing without tracking:', error);
     // Don't set sessionInitialized = false to prevent retries
     sessionInitialized = true; // Prevent immediate retry
@@ -330,34 +322,39 @@ async function flushEvents(): Promise<void> {
     }
   }
   
-  // Add identity to each event
-  const payload = {
-    events: eventsToSend.map(event => ({
-      ...event,
-      anonymous_id: anonymousId,
-      session_id: sessionId,
-      ...(userEmail ? { email: userEmail } : {}),  // Include email if authenticated
-    })),
-  };
+  // Service layer handles business logic: formatting events with identity
+  // API client handles transport (HTTP call + validation)
+  const eventsWithIdentity = eventsToSend.map(event => ({
+    eventType: event.event_type,
+    sessionId,
+    anonymousId,
+    tripId: event.trip_id,
+    source: event.source,
+    recommendationRequestId: event.recommendation_request_id,
+    metadata: event.metadata,
+    position: event.position,
+    score: event.score,
+    clientTimestamp: event.client_timestamp,
+    pageUrl: event.page_url,
+    referrer: event.referrer,
+    ...(userEmail ? { email: userEmail } : {}),  // Include email if authenticated
+  }));
   
   try {
-    const response = await fetch(`${API_BASE}/api/events/batch`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-      keepalive: true,  // Allow completion during page unload
-    });
+    // Use API client for transport (HTTP call + validation)
+    // Service layer handles error recovery (re-queuing, retry strategies)
+    const response = await trackEventsBatch({ events: eventsWithIdentity });
     
-    if (!response.ok) {
-      console.error('[Tracking] Failed to send events:', response.status);
-      // Re-queue failed events (with limit)
+    if (!response.success) {
+      console.error('[Tracking] Failed to send events');
+      // Service layer handles error recovery: re-queue failed events (with limit)
       if (eventQueue.length < 100) {
         eventQueue = [...eventsToSend, ...eventQueue];
       }
     }
   } catch (error) {
+    // Service layer handles error recovery: re-queue on network error
     console.error('[Tracking] Error sending events:', error);
-    // Re-queue on network error
     if (eventQueue.length < 100) {
       eventQueue = [...eventsToSend, ...eventQueue];
     }
@@ -394,18 +391,31 @@ export function flushPendingEvents(): void {
       // Ignore errors during unload
     }
     
-    const payload = JSON.stringify({
-      events: eventQueue.map(event => ({
-        ...event,
-        anonymous_id: anonymousId,
-        session_id: sessionId,
-        // Note: Email not included during page unload (would require async)
-        // Regular flushEvents() includes email when called normally
-      })),
-    });
+    // Service layer handles formatting for sendBeacon (synchronous during page unload)
+    // Note: Can't use API client here because sendBeacon is synchronous and API client is async
+    // This is a special case where we must use raw fetch/sendBeacon
+    const eventsWithIdentity = eventQueue.map(event => ({
+      event_type: event.event_type,
+      session_id: sessionId,
+      anonymous_id: anonymousId,
+      trip_id: event.trip_id,
+      source: event.source,
+      recommendation_request_id: event.recommendation_request_id,
+      metadata: event.metadata,
+      position: event.position,
+      score: event.score,
+      client_timestamp: event.client_timestamp,
+      page_url: event.page_url,
+      referrer: event.referrer,
+      // Note: Email not included during page unload (would require async)
+      // Regular flushEvents() includes email when called normally
+    }));
     
+    const payload = JSON.stringify({ events: eventsWithIdentity });
     const blob = new Blob([payload], { type: 'application/json' });
-    navigator.sendBeacon(`${API_BASE}/api/events/batch`, blob);
+    // Use API URL from environment (same pattern as API client)
+    const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+    navigator.sendBeacon(`${apiBase}/api/events/batch`, blob);
     eventQueue = [];
   } else {
     // Fallback to async fetch

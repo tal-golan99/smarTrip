@@ -1,14 +1,9 @@
-import type { Trip } from '@/services/api.service';
 import { CheckCircle, AlertCircle, Clock, XCircle } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
 // ============================================
 // TRIP UTILITIES
 // ============================================
-
-export function getTripField(trip: Trip, snakeCase: string, camelCase: string): any {
-  return (trip as any)[snakeCase] || (trip as any)[camelCase];
-}
 
 export function getStatusLabel(status?: string): string {
   const statusMap: Record<string, string> = {
@@ -115,7 +110,7 @@ export function getAvailableMonths(selectedYear: string): { index: number; name:
 
 export function getAvailableYears(): string[] {
   const currentYear = new Date().getFullYear();
-  return [currentYear.toString(), (currentYear + 1).toString(), (currentYear + 2).toString()];
+  return [currentYear.toString(), (currentYear + 1).toString()];
 }
 
 // ============================================

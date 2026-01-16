@@ -146,8 +146,6 @@ function AuthPageContent() {
       // Build the callback URL - must match one of the URLs configured in Supabase Dashboard
       const callbackUrl = `${origin}/auth/callback?redirect=${encodeURIComponent(redirectTo)}`;
       
-      console.log('[Auth] Google OAuth redirect URL:', callbackUrl);
-      
       const { error: oauthError } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
@@ -167,7 +165,6 @@ function AuthPageContent() {
     e.preventDefault();
     e.stopPropagation();
     const redirectTo = searchParams.get('redirect') || '/search';
-    console.log('[Auth] Continue as guest, redirecting to:', redirectTo);
     // Use window.location for more reliable navigation
     window.location.href = redirectTo;
   };
@@ -191,7 +188,8 @@ function AuthPageContent() {
             alt="SmartTrip Logo"
             width={120}
             height={120}
-            className="mx-auto mb-4 brightness-0"
+            className="mx-auto mb-4 brightness-0 h-auto"
+            style={{ width: 'auto' }}
             priority
           />
           <p className="text-gray-600 text-sm mb-4">

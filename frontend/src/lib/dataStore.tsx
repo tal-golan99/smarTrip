@@ -14,7 +14,7 @@ import React, { useState, useEffect, useCallback, useRef, createContext, useCont
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
 
-import type { BaseCountry, BaseTripType, BaseTag } from '@/services/api.service';
+import type { BaseCountry, BaseTripType, BaseTag } from '@/api';
 
 // ============================================
 // TYPE DEFINITIONS
@@ -150,12 +150,18 @@ export function DataStoreProvider({ children }: { children: ReactNode }) {
       const data = await response.json();
       
       if (data.success && data.countries) {
-        const mapped: Country[] = data.countries.map((c: any) => ({
-          id: c.id,
-          name: c.name,
-          nameHe: c.name_he || c.nameHe || c.name,
-          continent: c.continent,
-        }));
+        const mapped: Country[] = data.countries.map((c: any) => {
+          // Backend should return nameHe in camelCase (via model_dump(by_alias=True))
+          // Handle both camelCase and snake_case for compatibility
+          const nameHe = c.nameHe ?? c.name_he ?? null;
+          return {
+            id: c.id,
+            name: c.name,
+            // Use nameHe if it exists and is non-empty, otherwise fall back to English name
+            nameHe: (nameHe && nameHe.trim()) ? nameHe : c.name,
+            continent: c.continent,
+          };
+        });
         setCountries(mapped);
         setIsColdStart(false);
         setRetryCount(0);
@@ -212,7 +218,7 @@ export function DataStoreProvider({ children }: { children: ReactNode }) {
         const mapped: TripType[] = data.data.map((t: any) => ({
           id: t.id,
           name: t.name,
-          nameHe: t.name_he || t.nameHe || t.name,
+          nameHe: t.nameHe || t.name,
           description: t.description,
         }));
         setTripTypes(mapped);
@@ -254,14 +260,13 @@ export function DataStoreProvider({ children }: { children: ReactNode }) {
       
       const data = await response.json();
       if (data.success && data.data) {
-        const mapped: ThemeTag[] = data.data
-          .filter((t: any) => t.category === 'THEME')
-          .map((t: any) => ({
-            id: t.id,
-            name: t.name,
-            nameHe: t.name_he || t.nameHe || t.name,
-            category: t.category,
-          }));
+        // All tags are theme tags (category column was dropped in V2 migration)
+        const mapped: ThemeTag[] = data.data.map((t: any) => ({
+          id: t.id,
+          name: t.name,
+          nameHe: t.nameHe || t.name,
+          category: 'THEME', // All tags are theme tags in V2
+        }));
         setThemeTags(mapped);
         setIsColdStart(false);
         setRetryCount(0);

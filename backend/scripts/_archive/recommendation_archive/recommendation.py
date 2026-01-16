@@ -20,10 +20,11 @@ from dateutil.relativedelta import relativedelta
 from sqlalchemy import and_, or_, extract
 from sqlalchemy.orm import joinedload, selectinload
 from typing import Dict, List, Optional, Tuple, Any
+import heapq
 
 from app.core.database import db_session
 from app.models.trip import (
-    TripOccurrence, TripTemplate, TripTemplateTag, Country, TripType
+    TripOccurrence, TripTemplate, TripTemplateTag, TripTemplateCountry, Country, TripType
 )
 
 # Scoring weights dictionary (all float values)
@@ -89,8 +90,17 @@ class RecommendationConfig:
     
     # Result limits
     MAX_RESULTS = 10                # Return top 10 recommendations
-    MIN_RESULTS_THRESHOLD = 6       # If results < this, add relaxed results
+    MIN_RESULTS_THRESHOLD = 5       # If results <= this, add relaxed results
+    MAX_CANDIDATES_TO_SCORE = 30   # Use min-heap to keep only top 30 during scoring
     THEME_MATCH_THRESHOLD = 2       # Need 2+ themes for full points
+    
+    # Filtering parameters
+    MIN_SCORE_THRESHOLD = 30        # Don't show results with score less than this
+    MAX_YEARS_AHEAD = 1             # Show trips for current year + next N years only (1 = current + next year)
+    
+    # Frontend "Show More" parameters
+    SHOW_MORE_INCREMENT = 10        # Number of additional results to show per "show more" click
+    MAX_SHOW_MORE_CLICKS = 1        # Maximum number of times "show more" can be clicked
 
 
 # ============================================
@@ -140,6 +150,7 @@ def build_base_query():
         joinedload(TripOccurrence.template).joinedload(TripTemplate.trip_type),
         joinedload(TripOccurrence.template).joinedload(TripTemplate.primary_country),
         joinedload(TripOccurrence.template).selectinload(TripTemplate.template_tags).joinedload(TripTemplateTag.tag),
+        joinedload(TripOccurrence.template).selectinload(TripTemplate.template_countries).joinedload(TripTemplateCountry.country),
         joinedload(TripOccurrence.guide),
     ).join(TripTemplate).filter(TripTemplate.is_active == True)
 
@@ -180,13 +191,20 @@ def apply_date_filters(
     is_private_groups: bool,
     selected_year: Optional[str],
     selected_month: Optional[str],
-    user_start_date: Optional[date]
+    user_start_date: Optional[date],
+    config: type
 ):
     """Apply date filters (year, month, start_date)."""
     if is_private_groups:
         return query
     
     query = query.filter(TripOccurrence.start_date >= today)
+    
+    # Limit to current year + next N years only (default: current + next year)
+    current_year = today.year
+    max_year = current_year + config.MAX_YEARS_AHEAD
+    query = query.filter(extract('year', TripOccurrence.start_date) <= max_year)
+    print(f"[Recommendation] Applied year filter: <= {max_year} (current year + {config.MAX_YEARS_AHEAD})", flush=True)
     
     if selected_year and selected_year != 'all':
         query = query.filter(extract('year', TripOccurrence.start_date) == int(selected_year))
@@ -512,7 +530,8 @@ def build_relaxed_query(
     selected_month: Optional[str],
     difficulty: Optional[int],
     budget: Optional[float],
-    included_ids: set
+    included_ids: set,
+    config: type
 ):
     """
     Build relaxed search query with expanded filters.
@@ -577,6 +596,12 @@ def build_relaxed_query(
     if not is_private_groups:
         relaxed_query = relaxed_query.filter(TripOccurrence.start_date >= today)
         
+        # Limit to current year + next N years only (same as primary search)
+        current_year = today.year
+        max_year = current_year + config.MAX_YEARS_AHEAD
+        relaxed_query = relaxed_query.filter(extract('year', TripOccurrence.start_date) <= max_year)
+        print(f"[Recommendation RELAXED] Applied year filter: <= {max_year} (current year + {config.MAX_YEARS_AHEAD})", flush=True)
+        
         if selected_year and selected_year != 'all':
             try:
                 year_int = int(selected_year)
@@ -630,6 +655,524 @@ def build_relaxed_query(
 
 
 # ============================================
+# PREFERENCE PROCESSING FUNCTIONS
+# ============================================
+
+def parse_preferences(preferences: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Extract and parse all preferences from the input dict.
+    
+    Handles defaults, type conversions, and date parsing.
+    
+    Args:
+        preferences: Raw preferences dict from API request
+    
+    Returns:
+        Dict with all preference values extracted and parsed:
+        - selected_countries: List[int]
+        - selected_continents: List[str] (raw, not normalized)
+        - preferred_type_id: Optional[int]
+        - preferred_theme_ids: List[int]
+        - min_duration: int (default 1)
+        - max_duration: int (default 365)
+        - budget: Optional[float]
+        - difficulty: Optional[int]
+        - year: Optional[str]
+        - month: Optional[str]
+        - start_date: Optional[str] (legacy support)
+        - user_start_date: Optional[date] (parsed from start_date)
+    """
+    parsed = {
+        'selected_countries': preferences.get('selected_countries', []) or [],
+        'selected_continents': preferences.get('selected_continents', []) or [],
+        'preferred_type_id': preferences.get('preferred_type_id'),
+        'preferred_theme_ids': preferences.get('preferred_theme_ids', []) or [],
+        'min_duration': preferences.get('min_duration', 1) or 1,
+        'max_duration': preferences.get('max_duration', 365) or 365,
+        'budget': preferences.get('budget'),
+        'difficulty': preferences.get('difficulty'),
+        'year': preferences.get('year'),
+        'month': preferences.get('month'),
+        'start_date': preferences.get('start_date'),  # Legacy support
+    }
+    
+    # Parse start date safely (legacy support)
+    user_start_date = None
+    if parsed['start_date']:
+        try:
+            user_start_date = datetime.fromisoformat(parsed['start_date']).date()
+        except (ValueError, TypeError):
+            user_start_date = None
+    parsed['user_start_date'] = user_start_date
+    
+    return parsed
+
+
+def normalize_preferences(parsed_preferences: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Normalize preference values (continents, dates, etc.).
+    
+    Args:
+        parsed_preferences: Dict from parse_preferences()
+    
+    Returns:
+        Dict with normalized values:
+        - selected_continents_enum: List[str] (normalized continent enum values)
+        - All other fields from parsed_preferences
+    """
+    normalized = parsed_preferences.copy()
+    
+    # Normalize continents
+    selected_continents_input = normalized.get('selected_continents', []) or []
+    normalized['selected_continents_enum'] = normalize_continents(selected_continents_input)
+    
+    return normalized
+
+
+def determine_search_context(preferences: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Determine runtime context information needed for the search algorithm.
+    
+    This function extracts metadata that affects how the search behaves:
+    - Gets the current date (for filtering future trips, calculating "departing soon" bonuses)
+    - Gets the Private Groups trip type ID from the database
+    - Determines if the user is searching for Private Groups trips (which have different
+      date filtering rules - they don't require specific start dates)
+    
+    Args:
+        preferences: Normalized preferences dict (needs 'preferred_type_id')
+    
+    Returns:
+        Dict with:
+        - today: date - Current date for filtering and scoring
+        - private_groups_id: int - Database ID of "Private Groups" trip type
+        - is_private_groups: bool - True if user is searching for Private Groups trips
+    """
+    today = datetime.now().date()
+    private_groups_id = get_private_groups_type_id()
+    preferred_type_id = preferences.get('preferred_type_id')
+    is_private_groups = (preferred_type_id == private_groups_id)
+    
+    return {
+        'today': today,
+        'private_groups_id': private_groups_id,
+        'is_private_groups': is_private_groups
+    }
+
+
+# ============================================
+# QUERY BUILDING FUNCTIONS
+# ============================================
+
+def build_primary_query(
+    preferences: Dict[str, Any],
+    context: Dict[str, Any],
+    config: type
+):
+    """
+    Build the primary filtered query based on preferences.
+    
+    Applies all filters in sequence:
+    - Geographic filters (countries, continents)
+    - Trip type filter
+    - Date filters (year, month, start_date)
+    - Status filters (exclude Cancelled, Full)
+    - Difficulty filter
+    - Budget filter
+    
+    Args:
+        preferences: Normalized preferences dict
+        context: Search context dict (from determine_search_context)
+        config: RecommendationConfig class
+    
+    Returns:
+        SQLAlchemy query object ready for execution
+    """
+    today = context['today']
+    is_private_groups = context['is_private_groups']
+    selected_countries = preferences['selected_countries']
+    selected_continents_enum = preferences['selected_continents_enum']
+    preferred_type_id = preferences['preferred_type_id']
+    selected_year = preferences['year']
+    selected_month = preferences['month']
+    user_start_date = preferences['user_start_date']
+    difficulty = preferences['difficulty']
+    budget = preferences['budget']
+    
+    # Build base query
+    query = build_base_query()
+    
+    # Apply filters
+    query = apply_geographic_filters(query, selected_countries, selected_continents_enum)
+    
+    if preferred_type_id:
+        query = query.filter(TripTemplate.trip_type_id == preferred_type_id)
+    
+    query = apply_date_filters(query, today, is_private_groups, selected_year, selected_month, user_start_date, config)
+    query = apply_status_filters(query, is_private_groups)
+    query = apply_difficulty_filter(query, difficulty, config.DIFFICULTY_TOLERANCE)
+    query = apply_budget_filter(query, budget, config.BUDGET_MAX_MULTIPLIER)
+    
+    # Order by start_date
+    query = query.order_by(TripOccurrence.start_date.asc())
+    
+    return query
+
+
+def get_total_trips_count(today: date) -> int:
+    """
+    Get total count of available trips in database.
+    
+    Counts all active trips that are:
+    - Not cancelled
+    - Not full
+    - Have spots available
+    - Start date >= today
+    
+    Args:
+        today: Current date for filtering
+    
+    Returns:
+        Integer count of available trips
+    """
+    return db_session.query(TripOccurrence).join(TripTemplate).filter(
+        TripTemplate.is_active == True,
+        TripOccurrence.status.notin_(['Cancelled', 'Full']),
+        TripOccurrence.spots_left > 0,
+        TripOccurrence.start_date >= today
+    ).count()
+
+
+# ============================================
+# SCORING & RANKING FUNCTIONS
+# ============================================
+
+def score_candidates(
+    candidates: List[TripOccurrence],
+    preferences: Dict[str, Any],
+    context: Dict[str, Any],
+    weights: Dict[str, float],
+    config: type,
+    format_trip_func
+) -> List[Dict[str, Any]]:
+    """
+    Score candidate trips using a min-heap to keep only top N results.
+    
+    Uses a min-heap optimization to keep only the top MAX_CANDIDATES_TO_SCORE
+    trips during scoring, avoiding the need to score all candidates when we
+    only need a small subset. This significantly improves performance when
+    there are many candidates.
+    
+    The heap stores (score, date, trip_dict) tuples where:
+    - score: float score (lower is worse, kept at top of min-heap)
+    - date: sort date string for tiebreaking
+    - trip_dict: the scored trip dictionary
+    
+    Args:
+        candidates: List of TripOccurrence objects to score
+        preferences: Normalized preferences dict
+        context: Search context dict
+        weights: SCORING_WEIGHTS dict
+        config: RecommendationConfig class
+        format_trip_func: Function to format TripOccurrence as dict
+    
+    Returns:
+        List of scored trip dicts (up to MAX_CANDIDATES_TO_SCORE, sorted by score descending)
+    """
+    today = context['today']
+    private_groups_id = context['private_groups_id']
+    max_candidates = config.MAX_CANDIDATES_TO_SCORE
+    
+    # Min-heap to keep only top N trips
+    # Store (-score, sort_date, trip_dict) to use min-heap for max extraction
+    # Negated score: higher scores become smaller values (so they stay in heap)
+    # sort_date: earlier dates come first when scores are equal (ISO strings compare correctly)
+    heap = []
+    
+    for occ in candidates:
+        scored_trip = calculate_trip_score(
+            occ,
+            preferences,
+            weights,
+            config,
+            today,
+            private_groups_id,
+            format_trip_func
+        )
+        
+        if not scored_trip:  # Skip if None (filtered out)
+            continue
+        
+        score = scored_trip['_float_score']
+        sort_date = scored_trip['_sort_date']
+        trip_id = scored_trip.get('id', 0)  # Use trip ID as tiebreaker to avoid dict comparison
+        
+        # Use negated score so min-heap keeps highest scores
+        # Tuple: (-score, sort_date, trip_id, trip_dict)
+        # When scores equal, earlier dates (smaller strings) come first
+        # trip_id ensures we never compare dictionaries (all IDs are unique)
+        heap_item = (-score, sort_date, trip_id, scored_trip)
+        
+        if len(heap) < max_candidates:
+            # Heap not full yet, just add it
+            heapq.heappush(heap, heap_item)
+        else:
+            # Heap is full, check if this trip is better than the worst one
+            # Worst item has smallest -score (i.e., highest score), so we compare with heap[0]
+            worst_item = heap[0]
+            worst_negated_score = worst_item[0]
+            if -score < worst_negated_score:  # score > worst_score (since both negated)
+                # Replace worst trip with this better one
+                heapq.heapreplace(heap, heap_item)
+    
+    # Extract top results from min-heap
+    # Min-heap with negated scores: smallest negated_score = highest original_score
+    # To get highest scores first, we need the smallest negated scores
+    # Use nsmallest to get the smallest values (which are the highest original scores)
+    top_items = heapq.nsmallest(max_candidates, heap)
+    
+    # Extract trip dicts and sort by original score descending, then date ascending
+    # Format: (negated_score, sort_date, trip_id, trip_dict)
+    scored_trips = [trip for _, _, _, trip in top_items]
+    # Sort by original score (negate the negated score) descending, then date ascending
+    scored_trips.sort(key=lambda x: (-x['_float_score'], x['_sort_date']))
+    
+    return scored_trips
+
+
+def rank_and_select_top(
+    scored_trips: List[Dict[str, Any]],
+    max_results: int,
+    config: type
+) -> Tuple[List[Dict[str, Any]], set]:
+    """
+    Filter trips by score threshold and select top results.
+    
+    Since score_candidates returns pre-ranked results (sorted by score descending,
+    date ascending), this function only needs to:
+    1. Filter out trips below MIN_SCORE_THRESHOLD
+    2. Slice to get top max_results (already in correct order)
+    
+    Args:
+        scored_trips: List of scored trip dicts (already sorted by score_candidates)
+        max_results: Maximum number of results to return
+        config: RecommendationConfig class with MIN_SCORE_THRESHOLD
+    
+    Returns:
+        Tuple of:
+        - top_trips: List of top scored trips (up to max_results)
+        - included_ids: Set of trip IDs already included
+    """
+    # Filter out trips with score below threshold
+    # Results are already sorted, so filtering maintains order
+    filtered_trips = [
+        trip for trip in scored_trips 
+        if trip['_float_score'] >= config.MIN_SCORE_THRESHOLD
+    ]
+    
+    if len(filtered_trips) < len(scored_trips):
+        print(f"[Recommendation] Filtered out {len(scored_trips) - len(filtered_trips)} trips with score < {config.MIN_SCORE_THRESHOLD}", flush=True)
+    
+    # Get top results (already sorted, just slice)
+    top_trips = filtered_trips[:max_results]
+    
+    # Track IDs already included
+    included_ids = {t['id'] for t in top_trips}
+    
+    return top_trips, included_ids
+
+
+# ============================================
+# RELAXED SEARCH FUNCTIONS
+# ============================================
+
+def should_use_relaxed_search(
+    top_trips: List[Dict[str, Any]],
+    min_threshold: int,
+    max_results: int
+) -> Tuple[bool, int]:
+    """
+    Determine if relaxed search should be executed.
+    
+    Relaxed search is used when we don't have enough primary results.
+    This expands the search criteria to find more matching trips.
+    
+    Args:
+        top_trips: List of top scored trips from primary search
+        min_threshold: Minimum number of results needed (MIN_RESULTS_THRESHOLD)
+        max_results: Maximum number of results desired (MAX_RESULTS)
+    
+    Returns:
+        Tuple of:
+        - should_relax: bool - True if relaxed search should be executed
+        - needed_count: int - How many more trips are needed to reach max_results (0 if should_relax is False)
+    """
+    if len(top_trips) <= min_threshold:
+        needed = max_results - len(top_trips)
+        return True, needed
+    return False, 0
+
+
+def execute_relaxed_search(
+    preferences: Dict[str, Any],
+    context: Dict[str, Any],
+    included_ids: set,
+    needed_count: int,
+    weights: Dict[str, float],
+    config: type,
+    format_trip_func
+) -> List[Dict[str, Any]]:
+    """
+    Execute relaxed search to find additional trips.
+    
+    Relaxed search expands the search criteria:
+    - Geography: Same continent if specific countries selected
+    - Trip type: No filter (all types allowed with penalty)
+    - Date: 2 months before/after selected date
+    - Difficulty: +/-2 levels instead of +/-1
+    - Budget: 50% over instead of 30%
+    
+    Args:
+        preferences: Normalized preferences dict
+        context: Search context dict
+        included_ids: Set of trip IDs already included in primary results
+        needed_count: Number of additional trips needed
+        weights: SCORING_WEIGHTS dict
+        config: RecommendationConfig class
+        format_trip_func: Function to format TripOccurrence as dict
+    
+    Returns:
+        List of relaxed trip results (with internal fields cleaned)
+    """
+    today = context['today']
+    is_private_groups = context['is_private_groups']
+    private_groups_id = context['private_groups_id']
+    selected_countries = preferences['selected_countries']
+    selected_continents_enum = preferences['selected_continents_enum']
+    selected_year = preferences['year']
+    selected_month = preferences['month']
+    difficulty = preferences['difficulty']
+    budget = preferences['budget']
+    
+    print(f"[Recommendation RELAXED] Only {len(included_ids)} primary results. Need {needed_count} more relaxed results.", flush=True)
+    
+    # Build relaxed query
+    relaxed_query = build_relaxed_query(
+        today,
+        is_private_groups,
+        selected_countries,
+        selected_continents_enum,
+        selected_year,
+        selected_month,
+        difficulty,
+        budget,
+        included_ids,
+        config
+    )
+    
+    relaxed_candidates = relaxed_query.all()
+    print(f"[Recommendation RELAXED] Loaded {len(relaxed_candidates)} relaxed candidates for scoring", flush=True)
+    
+    # Score relaxed trips using min-heap (only keep top needed_count + buffer)
+    # We need at least needed_count, but keep a few extra in case some are filtered
+    max_relaxed = min(needed_count + 10, config.MAX_CANDIDATES_TO_SCORE)
+    heap = []
+    
+    for occ in relaxed_candidates:
+        scored_trip = calculate_relaxed_trip_score(
+            occ,
+            preferences,
+            weights,
+            config,
+            today,
+            private_groups_id,
+            format_trip_func
+        )
+        
+        if not scored_trip:
+            continue
+        
+        score = scored_trip['_float_score']
+        sort_date = scored_trip['_sort_date']
+        trip_id = scored_trip.get('id', 0)  # Use trip ID as tiebreaker to avoid dict comparison
+        
+        # Use negated score for consistent tie-breaking (same as score_candidates)
+        # Tuple: (-score, sort_date, trip_id, trip_dict)
+        # trip_id ensures we never compare dictionaries (all IDs are unique)
+        heap_item = (-score, sort_date, trip_id, scored_trip)
+        
+        if len(heap) < max_relaxed:
+            heapq.heappush(heap, heap_item)
+        else:
+            worst_item = heap[0]
+            worst_negated_score = worst_item[0]
+            if -score < worst_negated_score:  # score > worst_score
+                heapq.heapreplace(heap, heap_item)
+    
+    # Extract top results from min-heap (same logic as score_candidates)
+    top_items = heapq.nsmallest(needed_count, heap)
+    
+    # Extract trip dicts and sort by original score descending, then date ascending
+    # Format: (negated_score, sort_date, trip_id, trip_dict)
+    relaxed_scored = [trip for _, _, _, trip in top_items]
+    # Sort by original score (negate the negated score) descending, then date ascending
+    relaxed_scored.sort(key=lambda x: (-x['_float_score'], x['_sort_date']))
+    
+    # Clean up internal fields
+    relaxed_trips = []
+    for trip in relaxed_scored:
+        trip.pop('_sort_date', None)
+        trip.pop('_float_score', None)
+        relaxed_trips.append(trip)
+    
+    print(f"[Recommendation RELAXED] Added {len(relaxed_trips)} relaxed results", flush=True)
+    
+    return relaxed_trips
+
+
+# ============================================
+# RESULT FORMATTING FUNCTIONS
+# ============================================
+
+def format_results(
+    primary_trips: List[Dict[str, Any]],
+    relaxed_trips: List[Dict[str, Any]],
+    total_candidates: int,
+    total_trips_in_db: int
+) -> Dict[str, Any]:
+    """
+    Clean up internal fields and format final response.
+    
+    Removes internal sorting/scoring fields (_sort_date, _float_score) from
+    primary trips before returning the final response.
+    
+    Args:
+        primary_trips: List of top scored trips (may contain internal fields)
+        relaxed_trips: List of relaxed trips (already cleaned)
+        total_candidates: Number of candidates that were scored
+        total_trips_in_db: Total available trips in database
+    
+    Returns:
+        Formatted response dict with:
+        - primary_trips: List[Dict] - Top matching trips (cleaned)
+        - relaxed_trips: List[Dict] - Expanded results if needed
+        - total_candidates: int
+        - total_trips_in_db: int
+    """
+    # Clean up internal fields from primary trips
+    for trip in primary_trips:
+        trip.pop('_sort_date', None)
+        trip.pop('_float_score', None)
+    
+    return {
+        'primary_trips': primary_trips,
+        'relaxed_trips': relaxed_trips,
+        'total_candidates': total_candidates,
+        'total_trips_in_db': total_trips_in_db
+    }
+
+
+# ============================================
 # MAIN ORCHESTRATION FUNCTION
 # ============================================
 
@@ -664,149 +1207,37 @@ def get_recommendations(
     """
     config = RecommendationConfig
     weights = SCORING_WEIGHTS
-    today = datetime.now().date()
     
-    # Parse preferences
-    selected_countries = preferences.get('selected_countries', []) or []
-    selected_continents_input = preferences.get('selected_continents', []) or []
-    preferred_type_id = preferences.get('preferred_type_id')
-    preferred_theme_ids = preferences.get('preferred_theme_ids', []) or []
-    min_duration = preferences.get('min_duration', 1) or 1
-    max_duration = preferences.get('max_duration', 365) or 365
-    budget = preferences.get('budget')
-    difficulty = preferences.get('difficulty')
-    selected_year = preferences.get('year')
-    selected_month = preferences.get('month')
-    start_date_str = preferences.get('start_date')  # Legacy support
+    # Step 1: Parse and normalize preferences
+    parsed = parse_preferences(preferences)
+    normalized = normalize_preferences(parsed)
+    context = determine_search_context(normalized)
     
-    # Parse start date safely (legacy support)
-    user_start_date = None
-    if start_date_str:
-        try:
-            user_start_date = datetime.fromisoformat(start_date_str).date()
-        except (ValueError, TypeError):
-            user_start_date = None
-    
-    # Normalize continents
-    selected_continents_enum = normalize_continents(selected_continents_input)
-    
-    # Get private groups ID
-    private_groups_id = get_private_groups_type_id()
-    is_private_groups = (preferred_type_id == private_groups_id)
-    
-    # Total trips count (exclude Cancelled and Full)
-    total_trips_in_db = db_session.query(TripOccurrence).join(TripTemplate).filter(
-        TripTemplate.is_active == True,
-        TripOccurrence.status.notin_(['Cancelled', 'Full']),
-        TripOccurrence.spots_left > 0,
-        TripOccurrence.start_date >= today
-    ).count()
-    
-    # Build primary query
-    query = build_base_query()
-    
-    # Apply filters
-    query = apply_geographic_filters(query, selected_countries, selected_continents_enum)
-    
-    if preferred_type_id:
-        query = query.filter(TripTemplate.trip_type_id == preferred_type_id)
-    
-    query = apply_date_filters(query, today, is_private_groups, selected_year, selected_month, user_start_date)
-    query = apply_status_filters(query, is_private_groups)
-    query = apply_difficulty_filter(query, difficulty, config.DIFFICULTY_TOLERANCE)
-    query = apply_budget_filter(query, budget, config.BUDGET_MAX_MULTIPLIER)
-    
-    # Get all candidates for scoring
-    query = query.order_by(TripOccurrence.start_date.asc())
+    # Step 2: Build query and get candidates
+    query = build_primary_query(normalized, context, config)
     candidates = query.all()
+    total_trips_in_db = get_total_trips_count(context['today'])
     
     print(f"[Recommendation] Loaded {len(candidates)} candidates for scoring", flush=True)
     
-    # Score candidates
-    scored_trips = []
-    preferences_with_continents = {
-        **preferences,
-        'selected_continents_enum': selected_continents_enum
-    }
+    # Step 3: Score and rank candidates
+    scored_trips = score_candidates(
+        candidates, normalized, context, weights, config, format_trip_func
+    )
+    top_trips, included_ids = rank_and_select_top(scored_trips, config.MAX_RESULTS, config)
     
-    for occ in candidates:
-        scored_trip = calculate_trip_score(
-            occ,
-            preferences_with_continents,
-            weights,
-            config,
-            today,
-            private_groups_id,
-            format_trip_func
-        )
-        if scored_trip:  # None means trip was skipped
-            scored_trips.append(scored_trip)
-    
-    # Sort by score descending, then date ascending
-    scored_trips.sort(key=lambda x: (-x['_float_score'], x['_sort_date']))
-    
-    # Get top results
-    top_trips = scored_trips[:config.MAX_RESULTS]
-    
-    # Track IDs already included
-    included_ids = {t['id'] for t in top_trips}
-    
-    # RELAXED SEARCH
+    # Step 4: Relaxed search if needed
+    should_relax, needed_count = should_use_relaxed_search(
+        top_trips, config.MIN_RESULTS_THRESHOLD, config.MAX_RESULTS
+    )
     relaxed_trips = []
-    if len(top_trips) < config.MIN_RESULTS_THRESHOLD:
-        needed = config.MAX_RESULTS - len(top_trips)
-        print(f"[Recommendation RELAXED] Only {len(top_trips)} primary results. Need {needed} more relaxed results.", flush=True)
-        
-        # Build relaxed query
-        relaxed_query = build_relaxed_query(
-            today,
-            is_private_groups,
-            selected_countries,
-            selected_continents_enum,
-            selected_year,
-            selected_month,
-            difficulty,
-            budget,
-            included_ids
+    if should_relax:
+        relaxed_trips = execute_relaxed_search(
+            normalized, context, included_ids, needed_count,
+            weights, config, format_trip_func
         )
-        
-        relaxed_candidates = relaxed_query.all()
-        print(f"[Recommendation RELAXED] Loaded {len(relaxed_candidates)} relaxed candidates for scoring", flush=True)
-        
-        # Score relaxed trips
-        relaxed_scored = []
-        for occ in relaxed_candidates:
-            scored_trip = calculate_relaxed_trip_score(
-                occ,
-                preferences_with_continents,
-                weights,
-                config,
-                today,
-                private_groups_id,
-                format_trip_func
-            )
-            if scored_trip:
-                relaxed_scored.append(scored_trip)
-        
-        # Sort relaxed trips
-        relaxed_scored.sort(key=lambda x: (-x['_float_score'], x['_sort_date']))
-        
-        # Add needed relaxed trips
-        for trip in relaxed_scored[:needed]:
-            trip.pop('_sort_date', None)
-            trip.pop('_float_score', None)
-            relaxed_trips.append(trip)
-        
-        print(f"[Recommendation RELAXED] Added {len(relaxed_trips)} relaxed results", flush=True)
     
-    # Clean up internal fields from top_trips
-    for trip in top_trips:
-        trip.pop('_sort_date', None)
-        trip.pop('_float_score', None)
-    
-    return {
-        'primary_trips': top_trips,
-        'relaxed_trips': relaxed_trips,
-        'total_candidates': len(candidates),
-        'total_trips_in_db': total_trips_in_db
-    }
+    # Step 5: Format and return results
+    return format_results(
+        top_trips, relaxed_trips, len(candidates), total_trips_in_db
+    )

@@ -28,16 +28,12 @@ function AuthCallbackContent() {
           // Check if pathname contains our domain (misconfigured redirect)
           const pathname = window.location.pathname;
           if (pathname.includes('vercel.app') || pathname.includes('smartrip')) {
-            console.error('[Auth] Invalid redirect URL detected. Supabase Dashboard URLs must include https://');
-            console.error('[Auth] Current URL:', window.location.href);
-            
             // Extract hash and search params before redirecting
             const hash = window.location.hash;
             const search = window.location.search;
             
             // Redirect to correct domain with all params
             const correctUrl = `https://smartrip-alpha.vercel.app/auth/callback${search}${hash}`;
-            console.log('[Auth] Redirecting to correct URL:', correctUrl);
             window.location.href = correctUrl;
             return;
           }
@@ -152,7 +148,7 @@ function AuthCallbackContent() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#076839] via-[#0ba55c] to-[#12acbe] flex items-center justify-center">
       <div className="text-center text-white">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
+        <div className="animate-spin rounded-full h-12 h-12 border-b-2 border-white mx-auto mb-4"></div>
         <p className="text-lg">מתחבר...</p>
       </div>
     </div>
@@ -164,7 +160,7 @@ export default function AuthCallback() {
     <Suspense fallback={
       <div className="min-h-screen bg-gradient-to-br from-[#076839] via-[#0ba55c] to-[#12acbe] flex items-center justify-center">
         <div className="text-center text-white">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
+          <div className="animate-spin rounded-full h-12 h-12 border-b-2 border-white mx-auto mb-4"></div>
           <p className="text-lg">טוען...</p>
         </div>
       </div>
@@ -173,6 +169,3 @@ export default function AuthCallback() {
     </Suspense>
   );
 }
-
-
-
