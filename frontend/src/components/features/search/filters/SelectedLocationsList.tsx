@@ -1,7 +1,7 @@
 'use client';
 
 import { SelectionBadge } from '@/components/ui/SelectionBadge';
-import type { LocationSelection } from '@/contexts/SearchContext';
+import type { LocationSelection } from '@/schemas/search';
 
 interface SelectedLocationsListProps {
   locations: LocationSelection[];

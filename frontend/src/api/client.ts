@@ -76,48 +76,67 @@ async function getAuthHeaders(): Promise<Record<string, string>> {
 }
 
 /**
- * Validate API response using Zod schema (development only)
+ * Validate API response using Zod schema
+ * In production: Lightweight validation with error tracking
+ * In development: Full validation with detailed logging
  */
 function validateResponse<T>(
   data: any,
-  schema?: ZodSchema<T>
+  schema?: ZodSchema<T>,
+  endpoint?: string
 ): { isValid: boolean; errors?: z.ZodIssue[]; data?: T } {
-  // In production, skip validation for performance
-  if (!IS_DEVELOPMENT) {
+  // If no schema provided, skip validation
+  if (!schema) {
     return { isValid: true, data: data as T };
   }
   
-  // In development, validate if schema provided
-  if (schema) {
-    try {
-      // Use safeParse instead of parse to avoid throwing errors
-      const result = schema.safeParse(data);
-      if (!result.success) {
-        // Minimized error logging - just log the count and summary
+  try {
+    // Use safeParse to avoid throwing errors
+    const result = schema.safeParse(data);
+    
+    if (!result.success) {
+      // Log validation failure
+      if (IS_DEVELOPMENT) {
+        // Development: Detailed logging
         logApiWarning(`Response validation failed (${result.error.issues.length} errors)`);
-        // Still return data even if validation fails - validation is for debugging only
-        return { isValid: false, errors: result.error.issues, data: data as T };
+        console.error('Validation errors:', result.error.issues);
+      } else {
+        // Production: Log to error tracking service (Sentry, etc.)
+        if (typeof window !== 'undefined' && (window as any).Sentry) {
+          (window as any).Sentry.captureException(
+            new Error('API validation failed'),
+            {
+              extra: {
+                endpoint,
+                errorCount: result.error.issues.length,
+                errors: result.error.issues.slice(0, 5), // Only send first 5 errors
+              }
+            }
+          );
+        }
       }
-      return { isValid: true, data: result.data };
-    } catch (error) {
-      // Fallback error handling
-      if (error instanceof z.ZodError) {
+      
+      // Return data anyway (graceful degradation)
+      return { isValid: false, errors: result.error.issues, data: data as T };
+    }
+    
+    return { isValid: true, data: result.data };
+  } catch (error) {
+    // Fallback error handling
+    if (error instanceof z.ZodError) {
+      if (IS_DEVELOPMENT) {
         logApiWarning(`Response validation error (${error.issues.length} errors)`);
-        return { isValid: false, errors: error.issues, data: data as T };
       }
-      // Non-Zod errors - log but don't fail
+      return { isValid: false, errors: error.issues, data: data as T };
+    }
+    
+    // Non-Zod errors - log but don't fail
+    if (IS_DEVELOPMENT) {
       logApiWarning('Unexpected validation error', error);
     }
+    
+    return { isValid: true, data: data as T };
   }
-  
-  // Basic validation: check for success field
-  if (data && typeof data === 'object') {
-    if (!data.hasOwnProperty('success')) {
-      logApiWarning('Response missing "success" field', data);
-    }
-  }
-  
-  return { isValid: true, data: data as T };
 }
 
 /**
@@ -188,9 +207,9 @@ export async function apiFetch<T>(
       throw new Error(errorMessage);
     }
 
-    // Validate response structure (development only)
+    // Validate response structure (runs in both dev and production)
     if (schema) {
-      validateResponse(data, schema);
+      validateResponse(data, schema, endpoint);
     }
 
     // Backend returns data in various formats:

@@ -5,10 +5,8 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { supabase, isAuthAvailable } from '@/lib/supabaseClient';
 import { useUser } from '@/hooks/useUser';
 import { useCountries, useTripTypes, useDataStore } from '@/lib/dataStore';
-import { useSearch } from '@/hooks/useSearch';
-import { useSyncSearchQuery } from '@/hooks/useSyncSearchQuery';
+import { SearchFiltersProvider, useSearchFiltersContext } from '@/contexts/SearchFiltersContext';
 import { usePageView, useFilterTracking } from '@/hooks/useTracking';
-import { SearchProvider } from '@/contexts/SearchContext';
 import { LogoutConfirmModal } from '@/components/features/LogoutConfirmModal';
 import { ClearFiltersButton } from '@/components/ui/ClearFiltersButton';
 import { SearchPageHeader } from '@/components/features/search/SearchPageHeader';
@@ -70,7 +68,7 @@ function SearchPageContent() {
 
   // If still loading initial data, show loading indicator
   if (isLoading && !hasData && !hasError) {
-    return null; // Will be handled by Suspense fallback
+    return <SearchPageLoading />;
   }
 
   // If error fetching data and no cached data, show error with retry
@@ -79,7 +77,7 @@ function SearchPageContent() {
   }
 
   return (
-    <SearchProvider>
+    <SearchFiltersProvider countries={countries}>
       <SearchPageContentInner
         router={router}
         searchParams={searchParams}
@@ -94,7 +92,7 @@ function SearchPageContent() {
         confirmLogout={confirmLogout}
         cancelLogout={cancelLogout}
       />
-    </SearchProvider>
+    </SearchFiltersProvider>
   );
 }
 
@@ -125,13 +123,11 @@ function SearchPageContentInner({
   confirmLogout: () => void;
   cancelLogout: () => void;
 }) {
-  // Headless search hook - all business logic here (now uses shared context)
-  const search = useSearch();
-  const urlSync = useSyncSearchQuery();
+  // URL-based state management - URL is the single source of truth
+  const search = useSearchFiltersContext();
 
   // Track if this is the initial mount to prevent unwanted scrolls
   const isInitialMount = useRef(true);
-  const lastSearchParamsString = useRef<string>('');
 
   // Phase 1: Track page view (non-blocking)
   usePageView('search');
@@ -143,31 +139,6 @@ function SearchPageContentInner({
       isInitialMount.current = false;
     }
   }, []);
-
-  // Load state from URL params using useSyncSearchQuery hook
-  useEffect(() => {
-    const currentParamsString = searchParams.toString();
-    
-    // Only process if params actually changed (navigation occurred)
-    if (currentParamsString === lastSearchParamsString.current) {
-      return;
-    }
-    
-    lastSearchParamsString.current = currentParamsString;
-
-    // Only load from URL if there are params
-    const hasUrlParams = searchParams.get('countries') || 
-                         searchParams.get('continents') || 
-                         searchParams.get('type') || 
-                         searchParams.get('themes');
-    
-    if (hasUrlParams && countries.length > 0) {
-      const loadedFilters = urlSync.loadFiltersFromUrl(searchParams, countries);
-      if (Object.keys(loadedFilters).length > 0) {
-        search.loadFilters(loadedFilters);
-      }
-    }
-  }, [searchParams, countries, urlSync, search]);
 
   // Phase 1: Track filter changes/removals
   const currentFilters = useMemo(() => ({

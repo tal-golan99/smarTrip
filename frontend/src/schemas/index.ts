@@ -70,3 +70,7 @@ export {
   EvaluationScenarioSchema,
   EvaluationScenariosResponseSchema,
 } from './analytics';
+
+// Search types (client-side)
+export type { LocationSelection, SearchFilters } from './search';
+export { DEFAULT_FILTERS } from './search';

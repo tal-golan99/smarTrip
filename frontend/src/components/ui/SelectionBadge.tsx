@@ -10,7 +10,7 @@ import { useState } from 'react';
 import { X } from 'lucide-react';
 import clsx from 'clsx';
 import { COUNTRY_FLAGS, CONTINENT_IMAGES } from '@/lib/dataStore';
-import type { LocationSelection } from '@/contexts/SearchContext';
+import type { LocationSelection } from '@/schemas/search';
 
 interface SelectionBadgeProps {
   selection: LocationSelection;
