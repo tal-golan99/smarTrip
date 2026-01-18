@@ -206,10 +206,11 @@ export function useSearchFilters(countries: Country[]): UseSearchFiltersReturn {
     const params = serializeFiltersToUrl(newFilters);
     const url = `/search?${params.toString()}`;
     
+    // Prevent scroll to top when updating filters
     if (replace) {
-      router.replace(url);
+      router.replace(url, { scroll: false });
     } else {
-      router.push(url);
+      router.push(url, { scroll: false });
     }
   }, [router]);
 
@@ -319,7 +320,7 @@ export function useSearchFilters(countries: Country[]): UseSearchFiltersReturn {
 
   // Action: Clear all filters
   const clearAllFilters = useCallback(() => {
-    router.replace('/search');
+    router.replace('/search', { scroll: false });
   }, [router]);
 
   // Action: Execute search - navigate to results page
