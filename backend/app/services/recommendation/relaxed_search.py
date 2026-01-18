@@ -95,12 +95,13 @@ def build_relaxed_query(
         relaxed_query = relaxed_query.filter(extract('year', TripOccurrence.start_date) <= max_year)
         print(f"[Recommendation RELAXED] Applied year filter: <= {max_year} (current year + {config.MAX_YEARS_AHEAD})", flush=True)
         
+        # Handle year and month filters (can be independent)
         if selected_year and selected_year != 'all':
             try:
                 year_int = int(selected_year)
                 
                 if selected_month and selected_month != 'all':
-                    # User selected specific month: expand by 2 months before and after
+                    # User selected both year AND month: expand by 2 months before and after
                     month_int = int(selected_month)
                     center_date = datetime(year_int, month_int, 1).date()
                     
@@ -125,6 +126,25 @@ def build_relaxed_query(
                         TripOccurrence.start_date.between(start_range, end_range)
                     )
                     print(f"[Recommendation RELAXED] Expanded year {year_int} to: {start_range} to {end_range}", flush=True)
+            except (ValueError, TypeError):
+                pass  # Fall back to just >= today
+        elif selected_month and selected_month != 'all':
+            # User selected ONLY month (no year): filter by month across all valid years
+            # For relaxed search, expand by 2 months before and after
+            try:
+                month_int = int(selected_month)
+                
+                # Create date ranges for the selected month +/- 2 months in current and next years
+                # This will match trips in the target month window across multiple years
+                target_months = []
+                for offset in [-2, -1, 0, 1, 2]:
+                    target_month = (month_int + offset - 1) % 12 + 1  # Convert to 1-12 range
+                    target_months.append(target_month)
+                
+                relaxed_query = relaxed_query.filter(
+                    extract('month', TripOccurrence.start_date).in_(target_months)
+                )
+                print(f"[Recommendation RELAXED] Month-only filter: months {target_months} (expanded from {month_int})", flush=True)
             except (ValueError, TypeError):
                 pass  # Fall back to just >= today
     

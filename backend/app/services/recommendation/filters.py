@@ -78,10 +78,13 @@ def apply_date_filters(
     query = query.filter(extract('year', TripOccurrence.start_date) <= max_year)
     print(f"[Recommendation] Applied year filter: <= {max_year} (current year + {config.MAX_YEARS_AHEAD})", flush=True)
     
+    # Apply year filter if selected
     if selected_year and selected_year != 'all':
         query = query.filter(extract('year', TripOccurrence.start_date) == int(selected_year))
-        if selected_month and selected_month != 'all':
-            query = query.filter(extract('month', TripOccurrence.start_date) == int(selected_month))
+    
+    # Apply month filter if selected (independent of year selection)
+    if selected_month and selected_month != 'all':
+        query = query.filter(extract('month', TripOccurrence.start_date) == int(selected_month))
     
     # Legacy: If user specified a start date preference (old format)
     if user_start_date and user_start_date > today and not selected_year:
