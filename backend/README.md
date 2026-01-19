@@ -36,7 +36,7 @@ backend/
 │       ├── analytics/       # Analytics endpoints
 │       ├── resources/      # Resource endpoints
 │       └── system/         # System endpoints
-├── recommender/             # Recommendation engine
+├── analytics/              # Analytics and monitoring infrastructure
 │   ├── logging.py          # Request logging
 │   ├── metrics.py          # Performance metrics
 │   └── evaluation.py       # Quality evaluation
@@ -80,14 +80,13 @@ Create `backend/.env`:
 FLASK_APP=app.main:app
 FLASK_ENV=development
 SECRET_KEY=your-secret-key-here
-DATABASE_URL=postgresql://postgres.xxxxx:[PASSWORD]@aws-0-us-west-2.pooler.supabase.com:5432/postgres?sslmode=require
+DATABASE_URL=postgresql://postgres.xxxxx:[PASSWORD]@aws-0-us-west-2.pooler.supabase.com:5432/postgres
 ALLOWED_ORIGINS=http://localhost:3000
 SUPABASE_JWT_SECRET=your-jwt-secret-here
 ```
 
 **Important:**
 - Use **Session pooler** connection string (port 5432) for local development
-- Add `?sslmode=require` at the end of the connection string
 - Get connection string from Supabase Dashboard → Settings → Database
 
 ### Database Setup

@@ -126,15 +126,19 @@ const preferences = {
 ```
 
 **c. API Request**
-Makes POST request to backend:
+Makes POST request to backend via `getRecommendations()` from `frontend/src/api/v2.ts`:
+- Function: `getRecommendations(preferences)` 
 - Endpoint: `POST /api/v2/recommendations`
-- Headers: `Content-Type: application/json`
-- Body: JSON stringified preferences object
-- Timeout: 30 seconds (AbortController)
+- Uses `apiFetch()` wrapper from `client.ts`:
+  - Adds authentication headers (if user logged in)
+  - Headers: `Content-Type: application/json`
+  - Body: JSON stringified preferences object
+  - Timeout: 30 seconds (AbortController)
+  - Zod schema validation for response
 - Response time tracking: Records start/end time for analytics
 
 **d. Response Handling**
-- Parses JSON response
+- Parses JSON response (validated via Zod schema)
 - Extracts results array, metadata (counts, thresholds, request_id)
 - Updates React state for rendering
 - Tracks results view event with `useResultsTracking` hook
@@ -149,15 +153,26 @@ Makes POST request to backend:
 - Generates request ID (UUID) for logging
 
 **b. Recommendation Service Call**
-- Calls `get_recommendations(preferences, format_occurrence_as_trip)`
-- Passes formatting function for backward compatibility
+- Creates `serialize_occurrence()` function using Pydantic `TripOccurrenceSchema`
+- Calls `get_recommendations(preferences, serialize_occurrence)`
+- Passes serialization function to format results using Pydantic schemas
 
 #### 4. Backend: Recommendation Service Processing
-**Location**: `backend/app/services/recommendation.py`
+**Location**: `backend/app/services/recommendation/` (package)
 
-The `get_recommendations()` function orchestrates the pipeline:
+The recommendation service has been restructured into a modular package:
 
-**a. Query Building**
+**Package Structure**:
+- `engine.py` - Main orchestration (`get_recommendations()` function)
+- `scoring.py` - Scoring algorithm implementation
+- `filters.py` - Query building and filtering logic
+- `relaxed_search.py` - Relaxed search expansion logic
+- `constants.py` - Configuration and thresholds
+- `context.py` - Preference parsing and normalization
+
+The `get_recommendations()` function (in `engine.py`) orchestrates the pipeline:
+
+**a. Query Building** (`filters.py`)
 - Builds base query with eager loading (joinedload/selectinload)
 - Applies geographic filters (countries/continents)
 - Applies trip type filter (hard filter)
@@ -166,11 +181,11 @@ The `get_recommendations()` function orchestrates the pipeline:
 - Applies difficulty filter (±1 tolerance)
 - Applies budget filter (up to 30% over budget)
 
-**b. Primary Search**
+**b. Primary Search** (`engine.py` + `scoring.py`)
 - Loads all candidates matching hard filters
-- Scores each trip using `calculate_trip_score()`
-- Scoring factors:
-  - Base score: 25 points
+- Scores each trip using scoring algorithm from `scoring.py`
+- Scoring factors (configurable via `constants.py`):
+  - Base score: 30 points (configurable)
   - Theme matching: +25 (2+ themes), +12 (1 theme), -15 (none)
   - Difficulty: +15 (exact match)
   - Duration: +12 (ideal), +8 (good, ±4 days)
@@ -181,28 +196,31 @@ The `get_recommendations()` function orchestrates the pipeline:
 - Sorts by score (descending), then date (ascending)
 - Returns top 10 results
 
-**c. Relaxed Search** (if primary results < 6)
+**c. Relaxed Search** (`relaxed_search.py`) (if primary results < 6)
 - Expands filters:
   - Geography: Same continent if specific countries selected
   - Trip type: No filter (all types with -10 penalty)
   - Date: ±2 months from selected date
   - Difficulty: ±2 levels (instead of ±1)
   - Budget: 50% over (instead of 30%)
-- Applies -20 penalty to all relaxed results
-- Scores and sorts relaxed candidates
+- Applies relaxed penalty (configurable, default -15 points)
+- Scores and sorts relaxed candidates using same scoring algorithm
 - Adds needed results to reach 10 total
 
 #### 5. Backend: Response Formatting
-**Location**: `backend/app/api/v2/routes.py` → `format_occurrence_as_trip()`
+**Location**: `backend/app/api/v2/routes.py` → `serialize_occurrence()` function
 
 Converts `TripOccurrence` objects to frontend-compatible format:
+- Uses Pydantic `TripOccurrenceSchema` for serialization
+- Automatically converts snake_case to camelCase via `model_dump(by_alias=True)`
 - Combines template data (title, description, difficulty) with occurrence data (dates, price, status)
-- Includes related entities (country, guide, trip type, tags)
-- Adds match score and match details
-- Marks relaxed results with `is_relaxed: true`
+- Includes related entities (country, guide, trip type, tags) via eager loading
+- Adds match score and match details (from scoring algorithm)
+- Marks relaxed results with `is_relaxed: true` (added by recommendation service)
+- Removes unnecessary fields (e.g., template countries array) for performance
 
 #### 6. Backend: Logging
-**Location**: `backend/recommender/logging.py`
+**Location**: `backend/analytics/logging.py`
 
 After returning results, logs the request:
 - Request ID (UUID)
@@ -288,6 +306,8 @@ Component event handlers call tracking functions:
 #### 3. Frontend: Tracking Service Processing
 **Location**: `frontend/src/services/tracking.service.ts`, `frontend/src/hooks/useTracking.ts`
 
+**Note**: The tracking service remains in `frontend/src/services/` while API client functions are in `frontend/src/api/events.ts`. The tracking service uses the API client for network requests.
+
 **a. Identity Management**
 - Gets or creates `anonymous_id` from localStorage (persists across sessions)
 - Gets or creates `session_id` from localStorage (expires after 30 minutes)
@@ -331,7 +351,8 @@ When batch is ready:
 - Gets current `anonymous_id` and `session_id`
 - Optionally gets authenticated user email (if Supabase auth available)
 - Adds identity to each event
-- POST `/api/events/batch` with array of events
+- Calls `trackEventsBatch()` from `frontend/src/api/events.ts`
+- Which POSTs to `/api/events/batch` with array of events
 - Uses `keepalive: true` for reliable delivery during page unload
 
 **f. Page Unload Handling**
@@ -430,14 +451,14 @@ Dashboard/Reports
 ### Detailed Steps
 
 #### 1. Data Collection
-**Location**: `backend/recommender/logging.py`, `backend/app/services/events.py`
+**Location**: `backend/analytics/logging.py`, `backend/app/services/events.py`
 
 Data is collected in real-time:
 - **Recommendation Requests**: Logged after each recommendation call
 - **Events**: Tracked as users interact with the platform
 
 #### 2. Metrics Aggregation
-**Location**: `backend/recommender/metrics.py`
+**Location**: `backend/analytics/metrics.py`
 
 The `MetricsAggregator` class computes metrics:
 
@@ -480,7 +501,7 @@ The `MetricsAggregator` class computes metrics:
 - Query params: `days` (default 7), `limit` (default 10)
 
 #### 4. Evaluation Pipeline
-**Location**: `backend/recommender/evaluation.py`
+**Location**: `backend/analytics/evaluation.py`
 
 Automated testing of recommendation quality:
 - Loads evaluation scenarios from database
@@ -529,17 +550,30 @@ UI Components Render with Data
 **a. Component Mount**
 - Search page component mounts
 - `useEffect` hooks trigger data fetching:
-  - `fetchCountries()` → calls `getLocations()` from `api.service.ts`
-  - `fetchTypesAndTags()` → calls `getTripTypes()` and `getTags()` from `api.service.ts`
+  - `fetchCountries()` → calls `getLocations()` from `frontend/src/api/resources.ts`
+  - `fetchTypesAndTags()` → calls `getTripTypes()` and `getTags()` from `frontend/src/api/resources.ts`
 
 **b. API Service Calls**
-**Location**: `frontend/src/services/api.service.ts`
+**Location**: `frontend/src/api/` (modular API structure)
 
-Each function uses `apiFetch()` wrapper:
+The frontend API has been restructured into a modular architecture:
+
+**API Structure**:
+- `client.ts` - Core API utilities (`apiFetch()` wrapper, authentication, error handling)
+- `resources.ts` - Resource endpoints (`getLocations()`, `getTripTypes()`, `getTags()`, `getGuides()`)
+- `v2.ts` - V2 API endpoints (`getRecommendations()`, `getTemplates()`, `getOccurrences()`)
+- `events.ts` - Event tracking endpoints (`trackEventsBatch()`, `startSession()`)
+- `analytics.ts` - Analytics endpoints (`getMetrics()`, `getDailyMetrics()`)
+- `system.ts` - System endpoints (`healthCheck()`)
+- `types.ts` - TypeScript type definitions
+- `index.ts` - Centralized exports
+
+Each function uses `apiFetch()` wrapper from `client.ts`:
 - Adds authentication headers (if user logged in)
 - Handles retries for cold starts (network errors)
 - 30-second timeout with AbortController
 - Returns standardized `ApiResponse<T>` format
+- Zod schema validation for runtime type checking
 
 **c. Data Mapping**
 - Maps backend response to frontend types
@@ -700,7 +734,7 @@ JWT Token in API Requests (Authorization Header)
   - Links anonymous_id to registered user
 
 #### 3. Frontend: JWT Token in API Requests
-**Location**: `frontend/src/services/api.service.ts` → `getAuthHeaders()`
+**Location**: `frontend/src/api/client.ts` → `getAuthHeaders()`
 
 **a. Token Retrieval**
 - `getAuthHeaders()` function called before each API request
@@ -710,7 +744,8 @@ JWT Token in API Requests (Authorization Header)
 
 **b. Token Inclusion**
 - All API requests include auth headers automatically
-- `apiFetch()` wrapper adds headers to every request
+- `apiFetch()` wrapper (in `client.ts`) adds headers to every request
+- All API modules (`resources.ts`, `v2.ts`, `events.ts`, etc.) use `apiFetch()` for consistent authentication
 - Backend can identify authenticated users
 
 #### 4. Backend: API Authentication

@@ -131,12 +131,12 @@ trip-recommendations/
 │   │           ├── __init__.py
 │   │           └── routes.py               # Health check endpoint with database status
 │   │
-│   ├── recommender/                        # Recommendation engine module
+│   ├── analytics/                          # Analytics and monitoring infrastructure
 │   │   ├── __init__.py
 │   │   ├── logging.py                     # Request logging functionality for recommendation API calls
 │   │   ├── metrics.py                     # Performance metrics aggregation (on-demand computation)
 │   │   ├── evaluation.py                  # Algorithm quality evaluation using test scenarios
-│   │   └── README.md                      # Recommender module documentation
+│   │   └── README.md                      # Analytics module documentation
 │   │
 │   ├── migrations/                         # Database migration scripts
 │   │   ├── __init__.py
@@ -419,15 +419,15 @@ Resource data API endpoints. Provides read-only GET endpoints for countries, gui
 **`app/api/system/routes.py`**
 System API endpoints. Provides health check endpoint (`/api/health`) that returns service status and database statistics. Used for monitoring and deployment health checks.
 
-#### Recommender Module (`recommender/`)
+#### Analytics Module (`analytics/`)
 
-**`recommender/logging.py`**
+**`analytics/logging.py`**
 Request logging functionality for recommendation API calls. Logs user preferences, results, timing, and metadata for analytics and debugging. Generates unique request IDs for tracking and stores data in `recommendation_requests` table.
 
-**`recommender/metrics.py`**
+**`analytics/metrics.py`**
 Performance metrics aggregation for recommendation engine. Computes metrics on-demand from raw recommendation request data. Tracks response times, result counts, scoring distributions, and algorithm performance metrics. Provides functions for current metrics, daily metrics, and top searches.
 
-**`recommender/evaluation.py`**
+**`analytics/evaluation.py`**
 Algorithm quality evaluation using test scenarios. Compares recommendation results against expected outcomes, calculates accuracy metrics, and validates algorithm behavior. Loads scenarios from database and runs automated tests.
 
 #### Migrations (`migrations/`)

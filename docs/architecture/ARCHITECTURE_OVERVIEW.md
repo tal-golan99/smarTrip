@@ -341,7 +341,7 @@ Render provides simple, reliable deployment for Python applications with automat
 
 ### 1. Service Layer Pattern
 
-**Location**: `backend/app/services/recommendation.py`, `backend/app/services/events.py`
+**Location**: `backend/app/services/recommendation/` (package), `backend/app/services/events.py`
 
 **Why this pattern was chosen:**
 Separates business logic from API routes, making code testable and reusable. Business logic can be tested without HTTP mocks, and services can be reused by different interfaces (REST API, background jobs, CLI scripts).
@@ -352,7 +352,7 @@ Separates business logic from API routes, making code testable and reusable. Bus
 - **vs Domain-Driven Design**: Simpler, sufficient for our domain complexity, less over-engineering
 
 **Interview Answer:**
-"The Service Layer pattern separates business logic from HTTP concerns. Our API routes (`app/api/v2/routes.py`) handle HTTP requests and responses, while services (`app/services/recommendation.py`, `app/services/events.py`) contain the actual business logic. This separation allows us to test business logic without mocking HTTP requests, and services can be reused by different interfaces (REST API, background scripts, future GraphQL API). For example, the recommendation algorithm in `recommendation.py` can be called from the API endpoint, a CLI script, or a background job. This pattern makes the codebase more maintainable and testable."
+"The Service Layer pattern separates business logic from HTTP concerns. Our API routes (`app/api/v2/routes.py`) handle HTTP requests and responses, while services (`app/services/recommendation/`, `app/services/events.py`) contain the actual business logic. The recommendation service has been restructured into a modular package with separate modules for engine orchestration, scoring, filtering, relaxed search, constants, and context parsing. This separation allows us to test business logic without mocking HTTP requests, and services can be reused by different interfaces (REST API, background scripts, future GraphQL API). For example, the recommendation algorithm in the `recommendation` package can be called from the API endpoint, a CLI script, or a background job. This pattern makes the codebase more maintainable and testable."
 
 ---
 
@@ -464,7 +464,16 @@ trip-recommendations/
 │   │   ├── components/               # Reusable React components
 │   │   ├── hooks/                    # Custom React hooks
 │   │   ├── lib/                      # Utilities and state management
-│   │   └── services/                 # API and tracking services
+│   │   ├── api/                      # Modular API client (v2, events, resources, analytics)
+│   │   │   ├── client.ts            # Core API utilities (apiFetch, auth, retry logic)
+│   │   │   ├── v2.ts                # V2 API endpoints (recommendations, templates)
+│   │   │   ├── events.ts            # Event tracking endpoints
+│   │   │   ├── resources.ts         # Resource data endpoints (countries, guides, types, tags)
+│   │   │   ├── analytics.ts          # Analytics endpoints
+│   │   │   ├── system.ts            # System endpoints (health check)
+│   │   │   ├── types.ts             # TypeScript type definitions
+│   │   │   └── index.ts             # Centralized exports
+│   │   └── services/                 # Tracking service (tracking.service.ts)
 │   ├── public/                       # Static assets
 │   └── package.json                  # Dependencies and scripts
 │
@@ -474,13 +483,22 @@ trip-recommendations/
 │   │   ├── core/                     # Core functionality (database, auth, config)
 │   │   ├── models/                   # SQLAlchemy database models
 │   │   ├── services/                 # Business logic services
+│   │   │   ├── recommendation/      # Recommendation algorithm package
+│   │   │   │   ├── engine.py        # Main orchestration (get_recommendations)
+│   │   │   │   ├── scoring.py       # Scoring algorithm
+│   │   │   │   ├── filters.py       # Query building and filtering
+│   │   │   │   ├── relaxed_search.py # Relaxed search expansion
+│   │   │   │   ├── constants.py     # Configuration and thresholds
+│   │   │   │   ├── context.py       # Preference parsing and normalization
+│   │   │   │   └── __init__.py      # Package exports
+│   │   │   └── events.py            # Event processing service
 │   │   └── api/                      # API route handlers (Flask Blueprints)
 │   │       ├── v2/                   # V2 API endpoints
 │   │       ├── events/               # Event tracking endpoints
 │   │       ├── analytics/            # Analytics endpoints
 │   │       ├── resources/            # Resource data endpoints
 │   │       └── system/               # System endpoints (health check)
-│   ├── recommender/                  # Recommendation engine module
+│   ├── analytics/                    # Analytics and monitoring infrastructure (logging, metrics, evaluation)
 │   ├── migrations/                   # Database migration scripts
 │   ├── scripts/                      # Utility scripts
 │   └── requirements.txt              # Python dependencies
@@ -622,20 +640,25 @@ trip-recommendations/
   - Collects user preferences, tracks search submission, navigates to results
 - `frontend/src/app/search/results/page.tsx` - Results display page
   - Fetches recommendations, displays trip cards, tracks impressions
-- `frontend/src/services/api.service.ts` - API client
-  - `getRecommendations()` function (lines 609-616)
-  - Handles retry logic, timeouts, authentication headers
+- `frontend/src/api/` - Modular API client structure
+  - `client.ts` - Core API utilities (`apiFetch()` wrapper, authentication, error handling, retry logic)
+  - `v2.ts` - V2 API endpoints (`getRecommendations()`, `getTemplates()`, `getOccurrences()`)
+  - `index.ts` - Centralized exports for convenient importing
+  - All API modules use `apiFetch()` for consistent authentication, retry logic, and error handling
 
 **Backend:**
 - `backend/app/api/v2/routes.py` - V2 API routes
-  - `get_recommendations_v2()` endpoint (lines 512-632)
+  - `get_recommendations_v2()` endpoint (lines 423-632)
   - Formats request, calls service, logs request, returns results
-- `backend/app/services/recommendation.py` - Recommendation algorithm
-  - `get_recommendations()` function - Main orchestration
-  - `SCORING_WEIGHTS` - Point values for different match criteria
-  - `SCORE_THRESHOLDS` - Thresholds for color coding (HIGH: 70+, MID: 50+)
-  - Filtering functions, scoring functions, relaxed search logic
-- `backend/recommender/logging.py` - Request logging
+- `backend/app/services/recommendation/` - Recommendation algorithm package
+  - `engine.py` - Main orchestration (`get_recommendations()` function)
+  - `scoring.py` - Scoring algorithm implementation
+  - `filters.py` - Query building and filtering logic
+  - `relaxed_search.py` - Relaxed search expansion logic
+  - `constants.py` - Configuration and thresholds (`SCORING_WEIGHTS`, `SCORE_THRESHOLDS`)
+  - `context.py` - Preference parsing and normalization
+  - `__init__.py` - Package exports (`get_recommendations`)
+- `backend/analytics/logging.py` - Request logging
   - `RecommendationLogger.log_request()` - Logs raw request/response data
   - Stores in `recommendation_requests` table for analytics
 
@@ -673,12 +696,15 @@ trip-recommendations/
 ### Pipeline 3: Resource Data Pipeline
 
 **Frontend:**
-- `frontend/src/lib/dataStore.tsx` - Global state management
+- `frontend/src/lib/dataStore.tsx` - Global state management (optional pattern)
   - `DataStoreProvider` - Context provider for reference data
   - `useCountries()`, `useTripTypes()`, `useThemeTags()` - Custom hooks
   - Fetches data once, caches in context, available to all components
+- `frontend/src/api/resources.ts` - Resource API client
+  - `getLocations()`, `getCountries()`, `getTripTypes()`, `getTags()`, `getGuides()` functions
+  - Uses `apiFetch()` from `client.ts` for consistent authentication and error handling
 - `frontend/src/app/search/page.tsx` - Uses reference data
-  - Fetches locations, trip types, tags on component mount
+  - Fetches locations, trip types, tags on component mount via `resources.ts` API
   - Populates form dropdowns and filters
 
 **Backend:**
@@ -701,11 +727,11 @@ trip-recommendations/
   - `get_daily_metrics()` - Daily breakdown (lines 76-144)
   - `get_top_searches()` - Most common searches (lines 145-198)
   - `run_evaluation()` - Algorithm evaluation (lines 199-261)
-- `backend/recommender/metrics.py` - Metrics aggregation
+- `backend/analytics/metrics.py` - Metrics aggregation
   - `MetricsAggregator.get_current_metrics()` - Computes current metrics
   - `MetricsAggregator.aggregate_daily_metrics()` - Daily aggregation
   - Queries `recommendation_requests` table on-demand
-- `backend/recommender/logging.py` - Request logging
+- `backend/analytics/logging.py` - Request logging
   - Logs every recommendation request to `recommendation_requests` table
 - `backend/scripts/analytics/aggregate_daily_metrics.py` - Manual aggregation script
   - Can be run manually or scheduled via cron
@@ -732,9 +758,10 @@ trip-recommendations/
   - `get_current_user()` - Verifies JWT token, extracts user info
   - `require_auth` decorator - Requires authentication
   - `optional_auth` decorator - Optional authentication (guest support)
-- `frontend/src/services/api.service.ts` - API client
-  - `getAuthHeaders()` - Adds JWT token to request headers (lines 32-57)
-  - Automatically includes auth token in all API requests
+- `frontend/src/api/client.ts` - Core API client utilities
+  - `getAuthHeaders()` - Adds JWT token to request headers (async function)
+  - `apiFetch()` - Wrapper function that automatically includes auth token in all API requests
+  - All API modules (`v2.ts`, `events.ts`, `resources.ts`, etc.) use `apiFetch()` for consistent authentication
 
 ---
 

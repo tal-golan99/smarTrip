@@ -27,7 +27,7 @@ from scripts.analytics.aggregate_trip_interactions import aggregate_trip_interac
 9. **`backend/scripts/analytics/__init__.py`** - Enables `from scripts.analytics.*` imports
 10. **`backend/scripts/db/__init__.py`** - Enables `from scripts.db.*` imports
 11. **`backend/scripts/data_gen/__init__.py`** - Enables `from scripts.data_gen.*` imports
-12. **`backend/recommender/__init__.py`** - Enables `from recommender.*` imports
+12. **`backend/analytics/__init__.py`** - Enables `from analytics.*` imports
 13. **`backend/jobs/__init__.py`** - Enables `from jobs.*` imports
 14. **`backend/tests/__init__.py`** - Required for pytest test discovery
 15. **`backend/tests/integration/__init__.py`** - Required for pytest test discovery
