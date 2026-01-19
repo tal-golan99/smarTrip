@@ -16,12 +16,9 @@
 
 ## Key Features
 
-- **Intelligent Search** - Personalized trip recommendations based on user preferences with 30-point minimum match score
-- **Flexible Filtering** - Advanced search with multiple criteria including location, budget, duration, and difficulty
-- **User Analytics** - Comprehensive tracking and analytics for search behavior and user interactions
-- **Bilingual Support** - Full support for Hebrew and English content
-- **Type-Safe API** - Zod schema validation for all API endpoints with developer logging
-- **Modular Frontend** - Component-based architecture with React Context for state management
+- **Intelligent Search** - Personalized trip recommendations based on user preferences
+- **Flexible Filtering** - Advanced search with multiple criteria
+- **User Analytics** - tracking and analytics for search behavior and user interactions
 
 ---
 
