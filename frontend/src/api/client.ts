@@ -3,7 +3,7 @@
  * Handles HTTP requests with authentication, error handling, retry logic, validation, and logging
  */
 
-import { z, type ZodSchema } from 'zod';
+import { z } from 'zod';
 import type { ApiResponse } from './types';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
@@ -82,9 +82,9 @@ async function getAuthHeaders(): Promise<Record<string, string>> {
  */
 function validateResponse<T>(
   data: any,
-  schema?: ZodSchema<T>,
+  schema?: z.ZodType<T>,
   endpoint?: string
-): { isValid: boolean; errors?: z.ZodIssue[]; data?: T } {
+): { isValid: boolean; errors?: z.ZodError['issues']; data?: T } {
   // If no schema provided, skip validation
   if (!schema) {
     return { isValid: true, data: data as T };
@@ -147,7 +147,7 @@ export async function apiFetch<T>(
   endpoint: string,
   options?: RequestInit,
   retryAttempt = 0,
-  schema?: ZodSchema<any>
+  schema?: z.ZodType<any>
 ): Promise<ApiResponse<T>> {
   const MAX_RETRIES = 1; // Retry once
   const RETRY_DELAY = 2500; // 2.5 seconds (gives server time to wake up from cold start)

@@ -1,15 +1,5 @@
 """
 SQLAlchemy Models for SmartTrip Database Schema V2
-===================================================
-Major Refactoring:
-- Added Companies table
-- Split Trips into TripTemplates + TripOccurrences
-- Multi-country support for trips
-- Price history tracking
-- Reviews system
-- Image overrides per occurrence
-
-Normalized to 3NF with Foreign Keys and Constraints
 """
 
 from datetime import datetime

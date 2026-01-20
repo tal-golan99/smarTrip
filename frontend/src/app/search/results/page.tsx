@@ -361,10 +361,10 @@ function SearchResultsPageContent() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-white flex items-center justify-center p-4">
+      <div className="min-h-screen bg-gradient-to-br from-[#076839] via-[#0ba55c] to-[#12acbe] flex items-center justify-center p-4">
         <div className="text-center">
-          <Loader2 className="w-12 h-12 animate-spin text-[#12acbe] mx-auto mb-4" />
-          <p className="text-[#5a5a5a] text-lg">מחפש את הטיולים המושלמים עבורך...</p>
+          <Loader2 className="w-12 h-12 animate-spin text-white mx-auto mb-4" />
+          <p className="text-white text-lg">מחפש את הטיולים המושלמים עבורך...</p>
         </div>
       </div>
     );

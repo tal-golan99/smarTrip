@@ -1,5 +1,5 @@
 /**
- * User Tracking Module (Phase 1)
+ * User Tracking Module
  * ==============================
  * 
  * Handles user event tracking with:
