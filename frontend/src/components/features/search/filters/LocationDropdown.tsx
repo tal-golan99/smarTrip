@@ -1,3 +1,6 @@
+/**
+ * Location dropdown - Searchable continent/country picker with hierarchical display.
+ */
 'use client';
 
 import { Search, ChevronDown, Loader2 } from 'lucide-react';

@@ -1,3 +1,6 @@
+/**
+ * useUser hook - Manages current user authentication state and profile data.
+ */
 'use client';
 
 import { useState, useEffect } from 'react';

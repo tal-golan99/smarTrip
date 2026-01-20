@@ -1,3 +1,6 @@
+/**
+ * Selected locations list - Displays currently selected countries/continents as removable badges.
+ */
 'use client';
 
 import { SelectionBadge } from '@/components/ui/SelectionBadge';

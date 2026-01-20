@@ -1,3 +1,6 @@
+/**
+ * PostCSS configuration - Processes CSS with Tailwind and Autoprefixer.
+ */
 const config = {
   plugins: {
     tailwindcss: {},

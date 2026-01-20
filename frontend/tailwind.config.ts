@@ -1,3 +1,6 @@
+/**
+ * Tailwind CSS configuration - Theme and utility class customization.
+ */
 import type { Config } from "tailwindcss";
 
 export default {

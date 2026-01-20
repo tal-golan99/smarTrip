@@ -1,3 +1,6 @@
+/**
+ * Utility functions - Trip status labels, icons, and formatting helpers.
+ */
 import { CheckCircle, AlertCircle, Clock, XCircle } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 

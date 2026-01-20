@@ -1,3 +1,6 @@
+/**
+ * Root layout component - Defines global structure, fonts, and providers for the entire app.
+ */
 import type { Metadata } from "next";
 import { Assistant } from "next/font/google";
 import "./globals.css";

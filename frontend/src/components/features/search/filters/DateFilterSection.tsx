@@ -1,3 +1,6 @@
+/**
+ * Date filter section - Month and year selection for trip dates.
+ */
 'use client';
 
 import { Calendar } from 'lucide-react';

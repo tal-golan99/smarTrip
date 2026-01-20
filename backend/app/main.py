@@ -17,10 +17,10 @@ from app.core.database import init_db, db_session, engine
 # Note: LOGGING_ENABLED is now checked in analytics blueprint
 # Keeping this import for backward compatibility if needed elsewhere
 try:
-    from recommender.logging import get_logger, RecommendationLogger
+    from analytics.logging import get_logger, RecommendationLogger
     LOGGING_ENABLED = True
 except ImportError as e:
-    print(f"[WARNING] Recommender module not available: {e}")
+    print(f"[WARNING] Analytics module not available: {e}")
     LOGGING_ENABLED = False
 
 # Import event tracking (Phase 1)

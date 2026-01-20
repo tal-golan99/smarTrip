@@ -1,3 +1,6 @@
+/**
+ * Trip details page - Displays full information about a specific trip.
+ */
 'use client';
 
 import { useState, useEffect } from 'react';

@@ -1,3 +1,6 @@
+/**
+ * Theme filter section - Trip theme/tag selection (adventure, cultural, nature, etc.).
+ */
 'use client';
 
 import { Sparkles, Compass } from 'lucide-react';

@@ -1,3 +1,6 @@
+/**
+ * Search results page - Displays recommended trips based on search filters.
+ */
 'use client';
 
 import React, { useState, useEffect, Suspense, useRef, useCallback } from 'react';

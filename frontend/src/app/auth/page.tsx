@@ -1,3 +1,6 @@
+/**
+ * Authentication page - Handles Google OAuth login and user registration.
+ */
 'use client';
 
 import { useState, useEffect, Suspense } from 'react';

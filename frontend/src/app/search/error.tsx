@@ -1,3 +1,6 @@
+/**
+ * Search page error boundary - Handles errors in the search page.
+ */
 'use client';
 
 import { useEffect } from 'react';

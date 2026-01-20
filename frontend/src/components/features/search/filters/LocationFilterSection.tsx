@@ -1,3 +1,6 @@
+/**
+ * Location filter section - Country/continent selection with search and dropdown.
+ */
 'use client';
 
 import { useState, useEffect, useRef, useMemo } from 'react';

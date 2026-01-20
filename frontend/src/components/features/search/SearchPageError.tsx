@@ -1,3 +1,6 @@
+/**
+ * Search page error state - Error message with retry button.
+ */
 'use client';
 
 import { X } from 'lucide-react';

@@ -1,3 +1,6 @@
+/**
+ * Search action buttons - Search and clear filters buttons.
+ */
 'use client';
 
 import { Search } from 'lucide-react';

@@ -1,3 +1,6 @@
+/**
+ * Registration modal - Prompts users to register for personalized recommendations.
+ */
 'use client';
 
 import { X, Calendar } from 'lucide-react';

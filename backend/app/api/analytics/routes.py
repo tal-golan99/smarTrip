@@ -12,8 +12,8 @@ from app.core.database import is_database_error
 
 # Check if logging/metrics modules are available
 try:
-    from recommender.metrics import get_aggregator
-    from recommender.evaluation import get_evaluator
+    from analytics.metrics import get_aggregator
+    from analytics.evaluation import get_evaluator
     LOGGING_ENABLED = True
 except ImportError:
     LOGGING_ENABLED = False

@@ -1,3 +1,6 @@
+/**
+ * Results page error boundary - Handles errors in the results page.
+ */
 'use client';
 
 import { useEffect } from 'react';

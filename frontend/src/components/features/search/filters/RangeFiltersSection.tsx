@@ -1,3 +1,6 @@
+/**
+ * Range filters section - Budget, duration, and difficulty sliders.
+ */
 'use client';
 
 import { useCallback } from 'react';

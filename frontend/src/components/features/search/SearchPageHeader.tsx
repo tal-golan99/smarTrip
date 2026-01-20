@@ -1,3 +1,6 @@
+/**
+ * Search page header - Logo, navigation, and user authentication controls.
+ */
 'use client';
 
 import { Home, LogOut } from 'lucide-react';

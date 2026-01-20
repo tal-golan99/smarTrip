@@ -1,3 +1,6 @@
+/**
+ * Trip result card component - Displays trip info with tracking for impressions and clicks.
+ */
 'use client';
 
 import { useImpressionTracking, ClickSource } from '@/hooks/useTracking';

@@ -1,3 +1,6 @@
+/**
+ * 404 Not Found page - Displays custom error message for invalid routes.
+ */
 import Link from 'next/link';
 import Image from 'next/image';
 

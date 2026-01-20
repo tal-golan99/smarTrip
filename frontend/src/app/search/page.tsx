@@ -1,3 +1,6 @@
+/**
+ * Search page - Main trip search interface with filters and recommendations.
+ */
 'use client';
 
 import { Suspense, useState, useEffect, useRef, useMemo } from 'react';

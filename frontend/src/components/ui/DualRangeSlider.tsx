@@ -1,3 +1,6 @@
+/**
+ * Dual range slider - Interactive two-thumb slider for min/max range selection.
+ */
 'use client';
 
 import { useState, useRef, useCallback, useEffect } from 'react';

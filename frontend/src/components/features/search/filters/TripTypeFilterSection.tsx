@@ -1,3 +1,6 @@
+/**
+ * Trip type filter section - Allows users to select trip category (family, adventure, etc.).
+ */
 'use client';
 
 import { Compass } from 'lucide-react';

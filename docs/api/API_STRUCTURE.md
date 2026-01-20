@@ -218,7 +218,7 @@ Get current recommendation metrics (summary).
 
 **Functions:**
 - Aggregates metrics for specified time period
-- Uses metrics aggregator from `recommender.metrics`
+- Uses metrics aggregator from `analytics.metrics`
 - Returns 503 if metrics module not available
 
 ---
@@ -274,7 +274,7 @@ Run evaluation scenarios and get results.
 
 **Functions:**
 - Runs evaluation scenarios
-- Uses evaluator from `recommender.evaluation`
+- Uses evaluator from `analytics.evaluation`
 - Requires base URL from request for scenario execution
 - Returns 503 if evaluation module not available
 

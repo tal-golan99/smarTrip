@@ -1,3 +1,6 @@
+/**
+ * Results loading state - Spinner displayed while fetching search results.
+ */
 export default function Loading() {
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100 flex items-center justify-center">

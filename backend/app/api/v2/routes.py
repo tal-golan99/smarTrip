@@ -442,7 +442,7 @@ def get_recommendations_v2():
     
     if LOGGING_ENABLED:
         try:
-            from recommender.logging import get_logger
+            from analytics.logging import get_logger
             rec_logger = get_logger()
             request_id = rec_logger.generate_request_id()
             rec_logger.start_request_timer(request_id)

@@ -234,7 +234,7 @@ def upgrade() -> bool:
                 # Load personas from JSON
                 scenarios_dir = os.path.join(
                     os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-                    'scenarios'
+                    'scripts', 'scenarios'
                 )
                 personas_file = os.path.join(scenarios_dir, 'generated_personas.json')
                 

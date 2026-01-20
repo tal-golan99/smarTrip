@@ -1,3 +1,6 @@
+/**
+ * Search page loading state - Full-page spinner with logo while data loads.
+ */
 'use client';
 
 import { Loader2 } from 'lucide-react';

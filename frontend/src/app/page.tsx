@@ -1,3 +1,6 @@
+/**
+ * Home page - Landing page with hero section, features, and trip categories.
+ */
 'use client';
 
 import { useState } from 'react';

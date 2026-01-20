@@ -112,8 +112,8 @@ EXPECTED_DIRS = {
     'backend/tests/unit',
     'backend/tests/integration',
     'backend/tests/fixtures',
-    'backend/recommender',
-    'backend/scenarios',
+    'backend/analytics',
+    'backend/scripts/scenarios',
 }
 
 # Files that should NOT exist (old duplicates)

@@ -1,3 +1,6 @@
+/**
+ * Logout confirmation modal - Asks user to confirm before logging out.
+ */
 'use client';
 
 interface LogoutConfirmModalProps {

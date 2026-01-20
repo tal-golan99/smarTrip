@@ -1,3 +1,6 @@
+/**
+ * Global error boundary - Catches and displays errors from any page component.
+ */
 'use client';
 
 import { useEffect } from 'react';
