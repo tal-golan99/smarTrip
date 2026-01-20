@@ -1,5 +1,4 @@
 {
-  "_comment": "Vercel deployment configuration for Next.js frontend.",
   "buildCommand": "npm run build",
   "outputDirectory": ".next",
   "framework": "nextjs"
